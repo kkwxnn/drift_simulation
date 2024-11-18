@@ -41,6 +41,15 @@
     </xacro:inertial_cylinder>
   </link>
 
+  <!-- Front Wheel Joint -->
+  <joint name="front_wheel_joint" type="revolute">
+    <parent link="chassis"/>
+    <child link="front_wheel"/>
+    <origin xyz="0.16 0.0 -0.0155" rpy="${3.14/2} 0 0"/>
+    <axis xyz="1 0 0"/> 
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="10"/>
+  </joint>
+
   <!-- Rear Left Wheel -->
   <link name="rear_left_wheel">
     <visual>
@@ -60,6 +69,15 @@
     </xacro:inertial_cylinder>
   </link>
 
+   <!-- Rear Left Wheel Joint -->
+  <joint name="rear_left_wheel_joint" type="revolute">
+    <parent link="chassis"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="-0.16 0.08 -0.0155" rpy="${3.14/2} 0 0"/>
+    <axis xyz="1 0 0"/> 
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="10"/>
+  </joint>
+
   <!-- Rear Right Wheel -->
   <link name="rear_right_wheel">
     <visual>
@@ -78,24 +96,6 @@
       <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
     </xacro:inertial_cylinder>
   </link>
-
-  <!-- Front Wheel Joint -->
-  <joint name="front_wheel_joint" type="revolute">
-    <parent link="chassis"/>
-    <child link="front_wheel"/>
-    <origin xyz="0.16 0.0 -0.0155" rpy="${3.14/2} 0 0"/>
-    <axis xyz="1 0 0"/> 
-    <limit lower="-3.14" upper="3.14" effort="100" velocity="10"/>
-  </joint>
-
-  <!-- Rear Left Wheel Joint -->
-  <joint name="rear_left_wheel_joint" type="revolute">
-    <parent link="chassis"/>
-    <child link="rear_left_wheel"/>
-    <origin xyz="-0.16 0.08 -0.0155" rpy="${3.14/2} 0 0"/>
-    <axis xyz="1 0 0"/> 
-    <limit lower="-3.14" upper="3.14" effort="100" velocity="10"/>
-  </joint>
 
   <!-- Rear Right Wheel Joint -->
   <joint name="rear_right_wheel_joint" type="revolute">
