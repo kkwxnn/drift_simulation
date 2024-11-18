@@ -2,6 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="f1tenth">
 
   <xacro:include filename="gazebo.xacro"/>
+  <xacro:include filename="inertial_macros.xacro"/>
 
   <!-- Chassis Link -->
   <link name="chassis">
@@ -42,12 +43,12 @@
   </link>
 
   <!-- Front Wheel Joint -->
-  <joint name="front_wheel_joint" type="revolute">
+  <joint name="front_wheel_joint" type="continuous">
     <parent link="chassis"/>
     <child link="front_wheel"/>
-    <origin xyz="0.16 0.0 -0.0155" rpy="${3.14/2} 0 0"/>
-    <axis xyz="1 0 0"/> 
-    <limit lower="-3.14" upper="3.14" effort="100" velocity="10"/>
+    <origin xyz="0.16 0.0 -0.06" rpy="${3.14/2} 0 0"/>
+    <axis xyz="0 0 1"/> 
+    <limit effort="100" velocity="3.0"/>
   </joint>
 
   <!-- Rear Left Wheel -->
@@ -70,12 +71,12 @@
   </link>
 
    <!-- Rear Left Wheel Joint -->
-  <joint name="rear_left_wheel_joint" type="revolute">
+  <joint name="rear_left_wheel_joint" type="continuous">
     <parent link="chassis"/>
     <child link="rear_left_wheel"/>
-    <origin xyz="-0.16 0.08 -0.0155" rpy="${3.14/2} 0 0"/>
-    <axis xyz="1 0 0"/> 
-    <limit lower="-3.14" upper="3.14" effort="100" velocity="10"/>
+    <origin xyz="-0.16 0.08 -0.06" rpy="${3.14/2} 0 0"/>
+    <axis xyz="0 0 1"/> 
+    <limit effort="100" velocity="3.0"/>
   </joint>
 
   <!-- Rear Right Wheel -->
@@ -98,12 +99,12 @@
   </link>
 
   <!-- Rear Right Wheel Joint -->
-  <joint name="rear_right_wheel_joint" type="revolute">
+  <joint name="rear_right_wheel_joint" type="continuous">
     <parent link="chassis"/>
     <child link="rear_right_wheel"/>
-    <origin xyz="-0.16 -0.08 -0.0155" rpy="${3.14/2} 0 0"/>
-    <axis xyz="1 0 0"/> 
-    <limit lower="-3.14" upper="3.14" effort="100" velocity="10"/>
+    <origin xyz="-0.16 -0.08 -0.06" rpy="${3.14/2} 0 0"/>
+    <axis xyz="0 0 1"/> 
+    <limit effort="100" velocity="3.0"/>
   </joint>
 
 </robot>
