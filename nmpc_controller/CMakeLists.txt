@@ -29,7 +29,6 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   scripts/dummy_script.py
   scripts/nmpc.py
-  scripts/crocoddyl_mpc.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

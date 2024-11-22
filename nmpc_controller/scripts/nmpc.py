@@ -14,73 +14,13 @@ Br, Cr, Dr = 7.4, 1.2, -2.27
 v_blend_min = 0.1
 v_blend_max = 2.5
 
-# Time
-dt = 0.1  # Time step (s)
-t_max = 500  # Total time steps for the trajectory
-time_steps = np.linspace(0, t_max, int(t_max / dt))
+# Define parameters
+dt = 0.1  # time step
+L = 2.0   # length of the bicycle (wheelbase)
 
-# Initial state variables
-x, y = 0.0, 0.0  # Initial position
-yaw = 0.0  # Initial heading angle
-vx, vy, r, delta = 0.0, 0.0, 0.0, 0.0  # Initialize velocities and steering angle
+circle_radius = 10.0  # Radius of the circle
+circle_center = np.array([0, 0])  # Center of the circle
 
-# Circular trajectory parameters
-R = 5.0  # Radius of the circular trajectory (m)
-x_c, y_c = 0.0, 0.0  # Center of the circle
-angular_velocity = 0.5  # Rad/s (angular velocity of the vehicle around the circle)
-
-# Generate the circular trajectory (Goal)
-target_x = x_c + R * np.cos(angular_velocity * time_steps)
-target_y = y_c + R * np.sin(angular_velocity * time_steps)
-target_yaw = np.arctan2(np.gradient(target_y), np.gradient(target_x))
-
-# Combine the target positions with the yaw angles
-Goal = np.vstack((target_x, target_y, target_yaw)).T
-print(Goal)
-
-# Actual vehicle path (initially empty)
-vehicle_path_x = [x]
-vehicle_path_y = [y]
-
-def cost_function1(u, x, y, yaw, vx, vy, r, delta, Goal, t):
-    Fx = u[0]  # Force input
-    Delta_delta = u[1]  # Steering angle change (Delta_delta)
-
-    xg=10
-    yg=10
-    # Update state based on current control inputs
-    x_next, y_next, yaw_next, vx_next, vy_next, r_next, delta_next = update_state(Fx, Delta_delta, dt, x, y, yaw, vx, vy, r, delta)
-    vg = np.sqrt((x_next - xg)**2 + (y_next - yg)**2)
-    rg = np.arctan2((yg - y_next), (xg - x_next))
-    total_cost = vg+rg
-    return total_cost
-
-# Cost function for NMPC
-def cost_function(u, x, y, yaw, vx, vy, r, delta, Goal, t):
-    # Control input
-    Fx = u[0]  # Force input
-    Delta_delta = u[1]  # Steering angle change (Delta_delta)
-
-    # Update state based on current control inputs
-    x_next, y_next, yaw_next, vx_next, vy_next, r_next, delta_next = update_state(Fx, Delta_delta, dt, x, y, yaw, vx, vy, r, delta)
-
-    vg = np.sqrt((x_next - Goal[t][0])**2 + (y_next - Goal[t][1])**2)
-    rg = np.arctan2((Goal[t][1] - y_next), (Goal[t][0] - x_next))
-
-    alpha_vx = 1.0
-    alpha_r = 1.0
-    w = alpha_vx * (vx - vg)**2 + alpha_r * (r - rg)**2
-
-    target_x, target_y, target_yaw = Goal[t]
-    distance_to_path = ((target_x - x_next)**2 + (target_y - y_next)**2)
-    yaw_error = (target_yaw - yaw_next)**2
-
-    total_cost = w + distance_to_path + yaw_error + (vx_next**2) + (vy_next**2) + (r_next**2)
-    
-    print(u)
-    return total_cost
-
-# Drift model update function
 def calculate_lambda(vx, vy):
     phi = v_blend_min + 0.5 * (v_blend_max - v_blend_min)
     w = (2 * np.pi) / (v_blend_max - v_blend_min)
@@ -102,10 +42,16 @@ def calculate_tire_forces(alpha_f, alpha_r):
     Fyr = Dr * np.sin(Cr * np.arctan(Br * alpha_r))
     return Fyf, Fyr
 
-def update_state(Fx, Delta_delta, dt, x, y, yaw, vx, vy, r, delta):
+# State equations of the bicycle model
+def drift_model(state, control, dt):
+    x, y, yaw, vx, vy, r, delta = state
+    Fx, Delta_delta = control
+
     lam = calculate_lambda(vx, vy)
     alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
     Fyf, Fyr = calculate_tire_forces(alpha_f, alpha_r)
+    # Fyf = 0.0
+    # Fyr = 0.0
 
     # Dynamic model equations
     x_dot_dyn = vx * np.cos(yaw) - vy * np.sin(yaw)
@@ -125,7 +71,7 @@ def update_state(Fx, Delta_delta, dt, x, y, yaw, vx, vy, r, delta):
     r_dot_kin = (Delta_delta * vx) * (1 / (Lr + Lf))
     delta_dot_kin = Delta_delta
 
-    # lam = 0
+    lam = 0 # Kinematics Model Only
     # Fused Kinematic-Dynamic Bicycle Model
     x_dot = lam * x_dot_dyn + (1 - lam) * x_dot_kin
     y_dot = lam * y_dot_dyn + (1 - lam) * y_dot_kin
@@ -144,43 +90,119 @@ def update_state(Fx, Delta_delta, dt, x, y, yaw, vx, vy, r, delta):
     r += r_dot * dt
     delta += delta_dot * dt
 
-    return x, y, yaw, vx, vy, r, delta
+    return np.array([x, y, yaw, vx, vy, r, delta])
 
-# MPC Control Loop
-def mpc_control(x, y, yaw, vx, vy, r, delta, Goal, time_steps, dt):
-    vehicle_path_x, vehicle_path_y = [x], [y]
-    u0 = np.array([10.0, 0.0])  # Initial guesses
+# Cost function for MPC
+def mpc_cost(U, *args):
+    N, state, target = args
+    cost = 0.0
 
-    for t in range(1, len(time_steps)):
+    for i in range(N):
+        # Predict the next state using the drift model
+        state = drift_model(state, U[2 * i:2 * i + 2], dt)
         
-        # Use optimization to minimize the cost function
-        result = minimize(cost_function, u0, args=(x, y, yaw, vx, vy, r, delta, Goal, t), bounds=[(0, 10), (-np.pi / 4, np.pi / 4)])
-        # result = minimize(cost_function, u0, args=(x, y, yaw, vx, vy, r, delta, Goal, t), bounds=[(-np.pi / 4, np.pi / 4), (0, 15)])
-
-        # Extract the optimal control inputs
-        Fx_opt, delta_control_opt = result.x
-
-        # Update the state using the optimal control inputs
-        x, y, yaw, vx, vy, r, delta = update_state(Fx_opt, delta_control_opt, dt, x, y, yaw, vx, vy, r, delta)
+        # Extract current state variables
+        x, y, yaw, vx, vy, r, delta = state
         
-        # Log the vehicle path
-        vehicle_path_x.append(x)
-        vehicle_path_y.append(y)
-        u0 = np.array([Fx_opt, delta_control_opt])  # Initial guesses
+        # Extract target state variables
+        x_target, y_target, yaw_target = target
+        
+        # Calculate position error (distance squared)
+        position_error = (x - x_target)**2 + (y - y_target)**2
 
-    return vehicle_path_x, vehicle_path_y
+        # Calculate heading error (yaw difference squared)
+        heading_error = (yaw - yaw_target)**2
 
-# Run the MPC and plot the results
-vehicle_path_x, vehicle_path_y = mpc_control(x, y, yaw, vx, vy, r, delta, Goal, time_steps, dt)
+        # Calculate velocity errors (penalize deviation in forward velocity)
+        velocity_error = (vx - 1.0)**2  # Penalize deviation from a target speed (e.g., 1 m/s)
 
-# Plot the results
-plt.figure(figsize=(10, 6))
-plt.plot(vehicle_path_x, vehicle_path_y, label="MPC Path", color="blue")
-plt.plot(target_x, target_y, label="Target Path (Circle)", color="red", linestyle="--")
-plt.xlabel("X Position (m)")
-plt.ylabel("Y Position (m)")
-plt.title("MPC Tracking on Circular Path")
+        # Add regularization terms for control effort (minimize large inputs)
+        control_effort = 0.1 * (U[2 * i]**2 + U[2 * i + 1]**2)  # Weight for Fx and Delta delta
+
+        # Combine all costs
+        cost += position_error + 0.5 * heading_error + velocity_error + control_effort
+
+    return cost
+
+
+# Generate circle trajectory
+def circle_target(t, radius, center):
+    """Generate a target point on a circle."""
+    angle = t * 0.1  # Angular velocity (radians per second)
+    x = center[0] + radius * np.cos(angle)
+    y = center[1] + radius * np.sin(angle)
+
+    dx = -radius * np.sin(angle)
+    dy = radius * np.cos(angle)
+    yaw = np.arctan2(dy, dx)
+
+    return np.array([x, y, yaw])
+
+# MPC parameters
+N = 5  # Prediction horizon
+state = np.array([0, 0, 0, 0, 0, 0, 0])  # Initial state 
+
+# Initial guess for controls
+U0 = np.zeros(2 * N)
+
+# Constraints for controls
+bounds = [(-5.0, 5.0),                  # Fx bounds
+          (-np.pi/4, np.pi/4)] * N      # Delta delta bounds
+
+# Run MPC
+trajectory = [state]
+controls = []  # Store control inputs (Fx, Delta delta)
+time = [0]  # Time stamps
+targets = []  # Store dynamic targets
+
+for t in range(200):  # Simulate for 300 time steps
+    # Get current target on the circle
+    target = circle_target(t * dt, circle_radius, circle_center)
+    targets.append(target)
+
+    result = minimize(
+        mpc_cost, U0, args=(N, state, target),
+        bounds=bounds, method='SLSQP'
+    )
+    if not result.success:
+        print("Optimization failed!")
+        break
+
+    # Apply the first control input
+    U_opt = result.x
+    control = U_opt[:2]
+    state = drift_model(state, control, dt)
+    trajectory.append(state)
+    controls.append(control)
+    time.append((t + 1) * dt)
+
+    # Shift the predicted controls
+    U0 = np.hstack([U_opt[2:], np.zeros(2)])
+
+# Extract trajectory and control inputs
+trajectory = np.array(trajectory)
+controls = np.array(controls)
+targets = np.array(targets)
+
+# Plot trajectory and target circle
+plt.figure(figsize=(8, 6))
+plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory')
+plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle')
+plt.xlabel('X position')
+plt.ylabel('Y position')
 plt.legend()
+plt.title('MPC - Circular Trajectory')
 plt.grid()
+plt.axis('equal')
 plt.show()
 
+# Plot control inputs (delta and acceleration)
+plt.figure(figsize=(10, 5))
+plt.plot(time[:-1], controls[:, 0], label='Fx')
+plt.plot(time[:-1], controls[:, 1], label='Delta delta')
+plt.xlabel('Time [s]')
+plt.ylabel('Control Input')
+plt.legend()
+plt.title('Control Inputs vs Time')
+plt.grid()
+plt.show()
