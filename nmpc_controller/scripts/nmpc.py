@@ -16,7 +16,6 @@ v_blend_max = 2.5
 
 # Define parameters
 dt = 0.1  # time step
-L = 2.0   # length of the bicycle (wheelbase)
 
 circle_radius = 10.0  # Radius of the circle
 circle_center = np.array([0, 0])  # Center of the circle
@@ -72,6 +71,7 @@ def drift_model(state, control, dt):
     delta_dot_kin = Delta_delta
 
     lam = 0 # Kinematics Model Only
+    lam = 1 # Dynamics Model Only
     # Fused Kinematic-Dynamic Bicycle Model
     x_dot = lam * x_dot_dyn + (1 - lam) * x_dot_kin
     y_dot = lam * y_dot_dyn + (1 - lam) * y_dot_kin
@@ -97,6 +97,7 @@ def mpc_cost(U, *args):
     N, state, target = args
     cost = 0.0
 
+    # Prediction loop for the horizon N
     for i in range(N):
         # Predict the next state using the drift model
         state = drift_model(state, U[2 * i:2 * i + 2], dt)
@@ -109,20 +110,23 @@ def mpc_cost(U, *args):
         
         # Calculate position error (distance squared)
         position_error = (x - x_target)**2 + (y - y_target)**2
-
+        
         # Calculate heading error (yaw difference squared)
         heading_error = (yaw - yaw_target)**2
-
-        # Calculate velocity errors (penalize deviation in forward velocity)
-        velocity_error = (vx - 1.0)**2  # Penalize deviation from a target speed (e.g., 1 m/s)
-
-        # Add regularization terms for control effort (minimize large inputs)
+        
+        # Add regularization terms for control effort (penalize large inputs)
         control_effort = 0.1 * (U[2 * i]**2 + U[2 * i + 1]**2)  # Weight for Fx and Delta delta
 
-        # Combine all costs
-        cost += position_error + 0.5 * heading_error + velocity_error + control_effort
+        # For the final step (terminal state), include the velocity and heading penalties
+        if i == N - 1:
+            # Add velocity and yaw rate penalties at the last step
+            cost += position_error + heading_error + (vx**2) + (vy**2) + (r**2) + control_effort
+        else:
+            # Otherwise, just penalize position and heading errors plus control effort
+            cost += position_error + heading_error + control_effort
 
     return cost
+
 
 
 # Generate circle trajectory
@@ -146,8 +150,10 @@ state = np.array([0, 0, 0, 0, 0, 0, 0])  # Initial state
 U0 = np.zeros(2 * N)
 
 # Constraints for controls
-bounds = [(-5.0, 5.0),                  # Fx bounds
-          (-np.pi/4, np.pi/4)] * N      # Delta delta bounds
+# bounds = [(-5.0, 5.0),                  # Fx bounds
+#           (-0.698, 0.698)] * N          # Delta delta bounds
+bounds = [(-5.0, 5.0), (-1.5, 1.5)] * N
+
 
 # Run MPC
 trajectory = [state]
@@ -155,7 +161,7 @@ controls = []  # Store control inputs (Fx, Delta delta)
 time = [0]  # Time stamps
 targets = []  # Store dynamic targets
 
-for t in range(200):  # Simulate for 300 time steps
+for t in range(300):  # 1000
     # Get current target on the circle
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
@@ -184,17 +190,42 @@ trajectory = np.array(trajectory)
 controls = np.array(controls)
 targets = np.array(targets)
 
-# Plot trajectory and target circle
-plt.figure(figsize=(8, 6))
-plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory')
-plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle')
+# # Plot trajectory and target circle
+# plt.figure(figsize=(8, 6))
+# plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory')
+# plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle')
+# plt.xlabel('X position')
+# plt.ylabel('Y position')
+# plt.legend()
+# plt.title('MPC - Circular Trajectory')
+# plt.grid()
+# plt.axis('equal')
+# plt.show()
+
+# Plot trajectory, target circle, yaw, and velocity direction
+plt.figure(figsize=(10, 8))
+plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
+plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
+
+# Plot yaw direction
+for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
+    x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
+    vx, vy = trajectory[i, 3], trajectory[i, 4]
+
+    # Yaw direction
+    yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
+    yaw_dy = 0.5 * np.sin(yaw)
+    plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
+
+    
 plt.xlabel('X position')
 plt.ylabel('Y position')
 plt.legend()
-plt.title('MPC - Circular Trajectory')
+plt.title('MPC - Circular Trajectory with Yaw Visualization')
 plt.grid()
 plt.axis('equal')
 plt.show()
+
 
 # Plot control inputs (delta and acceleration)
 plt.figure(figsize=(10, 5))
