@@ -70,8 +70,8 @@ def drift_model(state, control, dt):
     r_dot_kin = (Delta_delta * vx) * (1 / (Lr + Lf))
     delta_dot_kin = Delta_delta
 
-    lam = 0 # Kinematics Model Only
-    # lam = 1 # Dynamics Model Only
+    # lam = 0 # Kinematics Model Only
+    lam = 1 # Dynamics Model Only
     # Fused Kinematic-Dynamic Bicycle Model
     x_dot = lam * x_dot_dyn + (1 - lam) * x_dot_kin
     y_dot = lam * y_dot_dyn + (1 - lam) * y_dot_kin
@@ -190,50 +190,98 @@ trajectory = np.array(trajectory)
 controls = np.array(controls)
 targets = np.array(targets)
 
-# # Plot trajectory and target circle
-# plt.figure(figsize=(8, 6))
-# plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory')
-# plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle')
+########################### Visualize in graph ##########################################
+
+# # Plot trajectory, target circle, yaw, and velocity direction
+# plt.figure(figsize=(10, 8))
+# plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
+# plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
+
+# # Plot yaw direction
+# for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
+#     x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
+#     vx, vy = trajectory[i, 3], trajectory[i, 4]
+
+#     # Yaw direction
+#     yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
+#     yaw_dy = 0.5 * np.sin(yaw)
+#     plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
+
+    
 # plt.xlabel('X position')
 # plt.ylabel('Y position')
 # plt.legend()
-# plt.title('MPC - Circular Trajectory')
+# plt.title('MPC - Circular Trajectory with Yaw Visualization')
 # plt.grid()
 # plt.axis('equal')
 # plt.show()
 
-# Plot trajectory, target circle, yaw, and velocity direction
-plt.figure(figsize=(10, 8))
-plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
-plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
 
-# Plot yaw direction
-for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
-    x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
-    vx, vy = trajectory[i, 3], trajectory[i, 4]
+# # Plot control inputs (delta and acceleration)
+# plt.figure(figsize=(10, 5))
+# plt.plot(time[:-1], controls[:, 0], label='Fx')
+# plt.plot(time[:-1], controls[:, 1], label='Delta delta')
+# plt.xlabel('Time [s]')
+# plt.ylabel('Control Input')
+# plt.legend()
+# plt.title('Control Inputs vs Time')
+# plt.grid()
+# plt.show()
 
-    # Yaw direction
-    yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
+########################### Visualize in animation ##########################################
+
+import matplotlib.animation as animation
+
+# Setup for animation
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Initialize plot elements
+trajectory_line, = ax.plot([], [], 'b-', lw=2, label='Robot Trajectory')
+target_circle, = ax.plot(targets[:, 0], targets[:, 1], 'g--', label='Target Circle')
+car_marker, = ax.plot([], [], 'ro', label='Car Position')
+yaw_arrow = ax.arrow(0, 0, 0, 0, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw')
+
+ax.set_title("MPC - Circular Trajectory Animation")
+ax.set_xlabel("X Position")
+ax.set_ylabel("Y Position")
+ax.legend()
+ax.grid()
+ax.axis('equal')
+
+# Update function for animation
+def update(frame):
+    global yaw_arrow
+
+    # Clear the arrow to avoid duplication
+    if yaw_arrow:
+        yaw_arrow.remove()
+
+    # Update trajectory
+    trajectory_line.set_data(trajectory[:frame, 0], trajectory[:frame, 1])
+
+    # Update car position
+    car_marker.set_data(trajectory[frame, 0], trajectory[frame, 1])
+
+    # Update yaw arrow
+    x, y, yaw = trajectory[frame, 0], trajectory[frame, 1], trajectory[frame, 2]
+    yaw_dx = 0.5 * np.cos(yaw)
     yaw_dy = 0.5 * np.sin(yaw)
-    plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
+    yaw_arrow = ax.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
 
-    
-plt.xlabel('X position')
-plt.ylabel('Y position')
-plt.legend()
-plt.title('MPC - Circular Trajectory with Yaw Visualization')
-plt.grid()
-plt.axis('equal')
-plt.show()
+    # Dynamically adjust plot limits
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    buffer = 1.0  # Space around the car for visibility
 
+    if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
+        ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
+        ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
 
-# Plot control inputs (delta and acceleration)
-plt.figure(figsize=(10, 5))
-plt.plot(time[:-1], controls[:, 0], label='Fx')
-plt.plot(time[:-1], controls[:, 1], label='Delta delta')
-plt.xlabel('Time [s]')
-plt.ylabel('Control Input')
-plt.legend()
-plt.title('Control Inputs vs Time')
-plt.grid()
+    return trajectory_line, car_marker, yaw_arrow
+
+# Create animation
+ani = animation.FuncAnimation(
+    fig, update, frames=len(trajectory), interval=50, blit=False
+)
+
 plt.show()
