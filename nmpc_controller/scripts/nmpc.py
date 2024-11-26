@@ -14,14 +14,35 @@ Br, Cr, Dr = 2.0, 1.2, -1.0
 
 # Blending speed thresholds
 v_blend_min = 0.1
-# v_blend_max = 2.5
-v_blend_max = 5.0
+v_blend_max = 2.5
+# v_blend_max = 5.0
 
 # Define parameters
-dt = 0.2 #0.1  # time step
+dt = 0.1  # time step
 
 circle_radius = 10.0  # Radius of the circle
 circle_center = np.array([0, 0])  # Center of the circle
+
+# Generate circle trajectory
+def circle_target(t, radius, center):
+    """Generate a target point on a circle."""
+    angle = t * 0.1  # Angular velocity (radians per second)
+    x = center[0] + radius * np.cos(angle)
+    y = center[1] + radius * np.sin(angle)
+
+    dx = -radius * np.sin(angle)
+    dy = radius * np.cos(angle)
+    yaw = np.arctan2(dy, dx)
+
+    return np.array([x, y, yaw])
+
+def circle_velocity_target(radius, v):
+    angular_velocity = v / radius 
+
+    vx_goal = radius * angular_velocity
+    r_goal = angular_velocity
+
+    return vx_goal, r_goal
 
 def calculate_lambda(vx, vy):
     phi = v_blend_min + 0.5 * (v_blend_max - v_blend_min)
@@ -101,53 +122,33 @@ def mpc_cost(U, *args):
     N, state, target = args
     cost = 0.0
 
+    vx_goal, r_goal = circle_velocity_target(circle_radius, 2.5) # 2.5 is v_max
+
+    alpha_vx = 0.0
+    alpha_r = 1.0
+
     # Prediction loop for the horizon N
     for i in range(N):
         # Predict the next state using the drift model
         state = drift_model(state, U[2 * i:2 * i + 2], dt)
         
-        # Extract current state variables
         x, y, yaw, vx, vy, r, delta = state
-        
-        # Extract target state variables
-        x_target, y_target, yaw_target = target
-        
-        # Calculate position error (distance squared)
-        position_error = (x - x_target)**2 + (y - y_target)**2
-        
-        # Calculate heading error (yaw difference squared)
-        diff_yaw = yaw - yaw_target
-        heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
-        
-        # Add regularization terms for control effort (penalize large inputs)
-        control_effort = 0.1 * (U[2 * i]**2 + U[2 * i + 1]**2)  # Weight for Fx and Delta delta
 
-        # For the final step (terminal state), include the velocity and heading penalties
-        if i == N - 1:
-            # Add velocity and yaw rate penalties at the last step
-            cost = position_error + heading_error + (vx**2) + (vy**2) + (r**2) + control_effort
-            # cost += position_error + heading_error
-        # else:
-        #     # Otherwise, just penalize position and heading errors plus control effort
-        #     cost += position_error + heading_error + control_effort
-        #     # cost += position_error + heading_error
+        w_ss = alpha_vx*(vx - vx_goal)**2 + alpha_r*(r - r_goal)**2
+        cost += w_ss
+        
+    # Transient Drift Parking
+    x_target, y_target, yaw_target = target
+    position_error = (x - x_target)**2 + (y - y_target)**2
+    diff_yaw = yaw - yaw_target
+    heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
+
+    # Cost for Parking
+    J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
+    cost += J_park
 
     return cost
 
-
-
-# Generate circle trajectory
-def circle_target(t, radius, center):
-    """Generate a target point on a circle."""
-    angle = t * 0.1  # Angular velocity (radians per second)
-    x = center[0] + radius * np.cos(angle)
-    y = center[1] + radius * np.sin(angle)
-
-    dx = -radius * np.sin(angle)
-    dy = radius * np.cos(angle)
-    yaw = np.arctan2(dy, dx)
-
-    return np.array([x, y, yaw])
 
 # MPC parameters
 N = 5  # Prediction horizon
@@ -155,7 +156,7 @@ state = np.array([10.0, 0, np.pi/2, 0, 0, 0, 0])  # Initial state
 
 # Initial guess for controls
 # U0 = np.zeros(2 * N)
-Fx_initial = 0.0  # Constant guess for F_x
+Fx_initial = 0.0  # Constant guess for Fx
 Delta_delta_initial = 0.0  # Constant guess for Delta delta
 
 U0 = [Fx_initial, Delta_delta_initial] * N
@@ -164,13 +165,11 @@ U0 = [Fx_initial, Delta_delta_initial] * N
 bounds = [(-5.0, 5.0),                  # Fx bounds
           (-0.698, 0.698)] * N          # Delta delta bounds
 
-
 # Run MPC
 trajectory = [state]
 controls = []  # Store control inputs (Fx, Delta delta)
 time = [0]  # Time stamps
 targets = []  # Store dynamic targets
-
 
 for t in range(1000):  # 1000
     # Get current target on the circle
@@ -338,92 +337,3 @@ ani = animation.FuncAnimation(
 )
 
 plt.show()
-
-# import matplotlib.animation as animation
-
-# # Setup for animation
-# fig, ax = plt.subplots(2, 1, figsize=(10, 12), gridspec_kw={'height_ratios': [3, 1]})
-
-# # Top subplot: Trajectory visualization
-# ax[0].set_title("MPC - Circular Trajectory Animation")
-# trajectory_line, = ax[0].plot([], [], 'b-', lw=2, label='Robot Trajectory')
-# target_circle, = ax[0].plot(targets[:, 0], targets[:, 1], 'g--', label='Target Circle')
-# car_marker, = ax[0].plot([], [], 'ro', label='Car Position')
-# yaw_arrow = ax[0].arrow(0, 0, 0, 0, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw')
-
-# ax[0].set_xlabel("X Position")
-# ax[0].set_ylabel("Y Position")
-# ax[0].legend()
-# ax[0].grid()
-# ax[0].axis('equal')
-
-# # Bottom subplot: Heading error
-# ax[1].set_title("Heading Error Over Time")
-# heading_error_line, = ax[1].plot([], [], 'r-', lw=2, label='Heading Error')
-# ax[1].set_xlabel("Time [s]")
-# ax[1].set_ylabel("Heading Error [rad]")
-# ax[1].grid()
-# ax[1].legend()
-
-# # Initialize heading error data
-# time_data = []
-# heading_error_data = []
-
-# # Update function for animation
-# def update(frame):
-#     global yaw_arrow
-
-#     # Clear the arrow to avoid duplication
-#     if yaw_arrow:
-#         yaw_arrow.remove()
-
-#     # Update trajectory
-#     trajectory_line.set_data(trajectory[:frame, 0], trajectory[:frame, 1])
-
-#     # Update car position
-#     car_marker.set_data(trajectory[frame, 0], trajectory[frame, 1])
-
-#     # Update yaw arrow
-#     x, y, yaw = trajectory[frame, 0], trajectory[frame, 1], trajectory[frame, 2]
-#     yaw_dx = 0.5 * np.cos(yaw)
-#     yaw_dy = 0.5 * np.sin(yaw)
-#     yaw_arrow = ax[0].arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
-
-#     # Calculate heading error
-#     yaw_target = targets[frame, 2]
-#     diff_yaw = yaw - yaw_target
-#     heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
-
-#     # Update heading error data
-#     time_data.append(time[frame])
-#     heading_error_data.append(heading_error)
-
-#     # Update heading error plot
-#     heading_error_line.set_data(time_data, heading_error_data)
-
-#     # Dynamically adjust heading error plot limits
-#     ax[1].set_xlim(0, time[frame] + 1)
-#     ax[1].set_ylim(
-#         min(heading_error_data) - 0.1, 
-#         max(heading_error_data) + 0.1
-#     )
-
-#     # Dynamically adjust trajectory plot limits
-#     x_min, x_max = ax[0].get_xlim()
-#     y_min, y_max = ax[0].get_ylim()
-#     buffer = 1.0  # Space around the car for visibility
-
-#     if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
-#         ax[0].set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
-#         ax[0].set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
-
-#     return trajectory_line, car_marker, heading_error_line
-
-# # Create animation
-# ani = animation.FuncAnimation(
-#     fig, update, frames=len(trajectory),
-#     interval=100, blit=False
-# )
-
-# plt.tight_layout()
-# plt.show()
