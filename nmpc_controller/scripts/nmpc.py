@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 
 # Constants
-m = 1.98  # Mass of the vehicle (kg)
-Iz = 0.24  # Moment of inertia around z-axis (kg*m^2)
-Lf = 0.125  # Distance from the center of gravity to the front axle (m)
-Lr = 0.125  # Distance from the center of gravity to the rear axle (m)
+m = 4.78 # 1.98  # Mass of the vehicle (kg)
+Iz = 0.0665 # 0.24  # Moment of inertia around z-axis (kg*m^2)
+Lf = 0.18 # 0.125  # Distance from the center of gravity to the front axle (m)
+Lr = 0.18 # 0.125  # Distance from the center of gravity to the rear axle (m)
 # Bf, Cf, Df = 7.4, 1.2, -2.27
 # Br, Cr, Dr = 7.4, 1.2, -2.27
 Bf, Cf, Df = 2.0, 1.2, -1.0
@@ -25,7 +25,6 @@ circle_center = np.array([0, 0])  # Center of the circle
 
 # Generate circle trajectory
 def circle_target(t, radius, center):
-    """Generate a target point on a circle."""
     angle = t * 0.1  # Angular velocity (radians per second)
     x = center[0] + radius * np.cos(angle)
     y = center[1] + radius * np.sin(angle)
@@ -39,7 +38,7 @@ def circle_target(t, radius, center):
 def circle_velocity_target(radius, v):
     angular_velocity = v / radius 
 
-    vx_goal = radius * angular_velocity
+    vx_goal = v
     r_goal = angular_velocity
 
     return vx_goal, r_goal
@@ -65,7 +64,6 @@ def calculate_tire_forces(alpha_f, alpha_r):
     Fyr = Dr * np.sin(Cr * np.arctan(Br * alpha_r))
     return Fyf, Fyr
 
-# State equations of the bicycle model
 def drift_model(state, control, dt):
     x, y, yaw, vx, vy, r, delta = state
     Fx, Delta_delta = control
@@ -76,13 +74,13 @@ def drift_model(state, control, dt):
     # Fyf = 0.0
     # Fyr = 0.0
 
-    B = 0.5
+    B = 0.01
     # Dynamic model equations
     x_dot_dyn = vx * np.cos(yaw) - vy * np.sin(yaw)
     y_dot_dyn = vx * np.sin(yaw) + vy * np.cos(yaw)
     yaw_dot_dyn = r
     vx_dot_dyn = (1 / m) * (-B*vx + Fx - Fyf * np.sin(delta) + m * vy * r)
-    vy_dot_dyn = (1 / m) * (B*vy + Fyr + Fyf * np.cos(delta) - m * vx * r)
+    vy_dot_dyn = (1 / m) * (-B*vy + Fyr + Fyf * np.cos(delta) - m * vx * r)
     r_dot_dyn = (1 / Iz) * (-B*r + Fyf * Lf * np.cos(delta) - Fyr * Lr)
     delta_dot_dyn = Delta_delta
 
@@ -95,7 +93,7 @@ def drift_model(state, control, dt):
     r_dot_kin = (Delta_delta * vx) * (1 / (Lr + Lf))
     delta_dot_kin = Delta_delta
 
-    # lam = 0 # Kinematics Model Only
+    lam = 0.05 # Kinematics Model Only
     # lam = 1 # Dynamics Model Only
     # Fused Kinematic-Dynamic Bicycle Model
     x_dot = lam * x_dot_dyn + (1 - lam) * x_dot_kin
@@ -124,7 +122,7 @@ def mpc_cost(U, *args):
 
     vx_goal, r_goal = circle_velocity_target(circle_radius, 2.5) # 2.5 is v_max
 
-    alpha_vx = 0.0
+    alpha_vx = 1.0
     alpha_r = 1.0
 
     # Prediction loop for the horizon N
@@ -145,7 +143,7 @@ def mpc_cost(U, *args):
 
     # Cost for Parking
     J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
-    cost += J_park
+    # cost += J_park
 
     return cost
 
@@ -171,7 +169,7 @@ controls = []  # Store control inputs (Fx, Delta delta)
 time = [0]  # Time stamps
 targets = []  # Store dynamic targets
 
-for t in range(1000):  # 1000
+for t in range(600):  # 1000
     # Get current target on the circle
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
@@ -203,41 +201,41 @@ targets = np.array(targets)
 
 ########################### Visualize in graph ##########################################
 
-# # Plot trajectory, target circle, yaw, and velocity direction
-# plt.figure(figsize=(10, 8))
-# plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
-# plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
+# Plot trajectory, target circle, yaw, and velocity direction
+plt.figure(figsize=(10, 8))
+plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
+plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
 
-# # Plot yaw direction
-# for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
-#     x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
-#     vx, vy = trajectory[i, 3], trajectory[i, 4]
+# Plot yaw direction
+for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
+    x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
+    vx, vy = trajectory[i, 3], trajectory[i, 4]
 
-#     # Yaw direction
-#     yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
-#     yaw_dy = 0.5 * np.sin(yaw)
-#     plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
+    # Yaw direction
+    yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
+    yaw_dy = 0.5 * np.sin(yaw)
+    plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
 
     
-# plt.xlabel('X position')
-# plt.ylabel('Y position')
-# plt.legend()
-# plt.title('MPC - Circular Trajectory with Yaw Visualization')
-# plt.grid()
-# plt.axis('equal')
-# plt.show()
+plt.xlabel('X position')
+plt.ylabel('Y position')
+plt.legend()
+plt.title('MPC - Circular Trajectory with Yaw Visualization')
+plt.grid()
+plt.axis('equal')
+plt.show()
 
 
-# # Plot control inputs (delta and acceleration)
-# plt.figure(figsize=(10, 5))
-# plt.plot(time[:-1], controls[:, 0], label='Fx')
-# plt.plot(time[:-1], controls[:, 1], label='Delta delta')
-# plt.xlabel('Time [s]')
-# plt.ylabel('Control Input')
-# plt.legend()
-# plt.title('Control Inputs vs Time')
-# plt.grid()
-# plt.show()
+# Plot control inputs (delta and acceleration)
+plt.figure(figsize=(10, 5))
+plt.plot(time[:-1], controls[:, 0], label='Fx')
+plt.plot(time[:-1], controls[:, 1], label='Delta delta')
+plt.xlabel('Time [s]')
+plt.ylabel('Control Input')
+plt.legend()
+plt.title('Control Inputs vs Time')
+plt.grid()
+plt.show()
 
 ########################### Visualize in animation ##########################################
 
@@ -261,6 +259,7 @@ Fyr_text = ax.text(0.05, 0.75, 'Fyr: 0', transform=ax.transAxes, fontsize=12, ve
 alpha_f_text = ax.text(0.05, 0.70, 'Alpha_f: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
 alpha_r_text = ax.text(0.05, 0.65, 'Alpha_r: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
 cost_text = ax.text(0.05, 0.60, 'Cost: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
+r_text = ax.text(0.05, 0.55, 'r: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
 
 ax.set_title("MPC - Circular Trajectory Animation")
 ax.set_xlabel("X Position")
@@ -303,6 +302,7 @@ def update(frame):
     alpha_f, alpha_r = calculate_slip_angles(vx, vy, trajectory[frame, 5], trajectory[frame, 6])
     Fyf, Fyr = calculate_tire_forces(alpha_f, alpha_r)
     cost = mpc_cost(U_opt, N, trajectory[frame], target)
+    r = trajectory[frame, 5]
 
     # Update the text elements
     vx_text.set_text(f'vx: {vx:.2f} m/s')
@@ -313,6 +313,7 @@ def update(frame):
     alpha_f_text.set_text(f'Alpha_f: {alpha_f:.2f} rad')
     alpha_r_text.set_text(f'Alpha_r: {alpha_r:.2f} rad')
     cost_text.set_text(f'Cost: {cost:.2f}')
+    r_text.set_text(f'r: {r:.2f}')
 
     # Dynamically adjust plot limits
     x_min, x_max = ax.get_xlim()
