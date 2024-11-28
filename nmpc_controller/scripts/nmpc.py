@@ -201,41 +201,41 @@ targets = np.array(targets)
 
 ########################### Visualize in graph ##########################################
 
-# Plot trajectory, target circle, yaw, and velocity direction
-plt.figure(figsize=(10, 8))
-plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
-plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
+# # Plot trajectory, target circle, yaw, and velocity direction
+# plt.figure(figsize=(10, 8))
+# plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
+# plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
 
-# Plot yaw direction
-for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
-    x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
-    vx, vy = trajectory[i, 3], trajectory[i, 4]
+# # Plot yaw direction
+# for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
+#     x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
+#     vx, vy = trajectory[i, 3], trajectory[i, 4]
 
-    # Yaw direction
-    yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
-    yaw_dy = 0.5 * np.sin(yaw)
-    plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
+#     # Yaw direction
+#     yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
+#     yaw_dy = 0.5 * np.sin(yaw)
+#     plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
 
     
-plt.xlabel('X position')
-plt.ylabel('Y position')
-plt.legend()
-plt.title('MPC - Circular Trajectory with Yaw Visualization')
-plt.grid()
-plt.axis('equal')
-plt.show()
+# plt.xlabel('X position')
+# plt.ylabel('Y position')
+# plt.legend()
+# plt.title('MPC - Circular Trajectory with Yaw Visualization')
+# plt.grid()
+# plt.axis('equal')
+# plt.show()
 
 
-# Plot control inputs (delta and acceleration)
-plt.figure(figsize=(10, 5))
-plt.plot(time[:-1], controls[:, 0], label='Fx')
-plt.plot(time[:-1], controls[:, 1], label='Delta delta')
-plt.xlabel('Time [s]')
-plt.ylabel('Control Input')
-plt.legend()
-plt.title('Control Inputs vs Time')
-plt.grid()
-plt.show()
+# # Plot control inputs (delta and acceleration)
+# plt.figure(figsize=(10, 5))
+# plt.plot(time[:-1], controls[:, 0], label='Fx')
+# plt.plot(time[:-1], controls[:, 1], label='Delta delta')
+# plt.xlabel('Time [s]')
+# plt.ylabel('Control Input')
+# plt.legend()
+# plt.title('Control Inputs vs Time')
+# plt.grid()
+# plt.show()
 
 ########################### Visualize in animation ##########################################
 
