@@ -28,7 +28,9 @@ ament_python_install_package(${PROJECT_NAME})
 # Install Python executables
 install(PROGRAMS
   scripts/dummy_script.py
-  scripts/nmpc.py
+  scripts/fuse_nmpc.py
+  scripts/loco_nmpc.py
+  scripts/loco_joy.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

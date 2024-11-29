@@ -93,7 +93,7 @@ def drift_model(state, control, dt):
     r_dot_kin = (Delta_delta * vx) * (1 / (Lr + Lf))
     delta_dot_kin = Delta_delta
 
-    lam = 0.05 # Kinematics Model Only
+    # lam = 0.05 # Kinematics Model Only
     # lam = 1 # Dynamics Model Only
     # Fused Kinematic-Dynamic Bicycle Model
     x_dot = lam * x_dot_dyn + (1 - lam) * x_dot_kin

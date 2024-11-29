@@ -177,7 +177,6 @@ def update_plot(frame):
     heading_arrow.set_data(arrow_x, arrow_y)
 
 
-
 ani = FuncAnimation(fig, update_plot, interval=dt * 1000)
 plt.show()
 pygame.quit()
