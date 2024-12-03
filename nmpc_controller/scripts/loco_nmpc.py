@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import scipy.optimize as opt
 
-# Vehicle parameters (same as in your original code)
+# Vehicle parameters 
 # Constants
 dt = 0.02
 m = 2.35
@@ -173,17 +173,18 @@ def cost_function(u, x0, N, dt):
 N = 3  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
-# u_initial = [-2.043563,    0.54835626,  0.12012904,  0.19187852, -1.50917811, -0.61073667]
+# u_initial = [-2.043563,    0.54835626,  0.12012904,  0.19187852, -1.50917811, -0.61073667] # Backward
+u_initial = [0.84183408,  0.45151292,  0.7560102,   0.35675445, -2.09682026,  0.33119607] # Forward
 
 throttle_bound = (-v_max, v_max)  
 steer_bound = (-steer_max, steer_max)
 
-throttle_initial = np.random.uniform(throttle_bound[0], throttle_bound[1], N)
-steer_initial = np.random.uniform(steer_bound[0], steer_bound[1], N)
+# throttle_initial = np.random.uniform(throttle_bound[0], throttle_bound[1], N)
+# steer_initial = np.random.uniform(steer_bound[0], steer_bound[1], N)
 
-u_initial = np.zeros(2 * N) 
-u_initial[::2] = throttle_initial 
-u_initial[1::2] = steer_initial   
+# u_initial = np.zeros(2 * N) 
+# u_initial[::2] = throttle_initial 
+# u_initial[1::2] = steer_initial   
 
 print(u_initial) 
 
@@ -208,6 +209,12 @@ traj_cog_x = []
 traj_cog_y = []
 traj_r_x = []
 traj_r_y = []
+
+# Heading arrow initialization
+heading_arrow = ax.quiver(0, 0, 0, 0, angles="xy", scale_units="xy", scale=3, color="black", label="Heading")
+
+# Legend for trajectories
+ax.legend([traj_cog, traj_r], ["CoG Trajectory (Green)", "Rear Trajectory (Red)"], loc="upper right")
 
 def update_plot(frame):
     global x
@@ -237,6 +244,10 @@ def update_plot(frame):
     traj_cog.set_data(traj_cog_x, traj_cog_y)
     traj_r.set_data(traj_r_x, traj_r_y)
 
+    # Update the heading arrow
+    heading_arrow.set_offsets([pos_x, pos_y])
+    heading_arrow.set_UVC(np.cos(pos_phi), np.sin(pos_phi))
+
     # Update the static velocity annotations (in top-left corner)
     velocity_texts[0].set_text(f"v_x: {v_x:.2f}")
     velocity_texts[1].set_text(f"v_y: {v_y:.2f}")
@@ -250,3 +261,37 @@ velocity_texts = [
 # Start the animation
 ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
 plt.show()
+
+# # Static plot of the trajectory and heading
+# plt.figure(figsize=(10, 8))
+
+# # Plot the trajectories
+# plt.plot(traj_cog_x, traj_cog_y, label="CoG Trajectory (Green)", color="green", linewidth=2)
+# plt.plot(traj_r_x, traj_r_y, label="Rear Trajectory (Red)", color="red", linewidth=2)
+
+# # Add the heading arrows
+# for i in range(0, len(traj_cog_x), 10):  # Plot every 10th point for clarity
+#     x, y = traj_cog_x[i], traj_cog_y[i]
+#     yaw = wrap_to_pi(np.arctan2(traj_cog_y[i] - traj_r_y[i], traj_cog_x[i] - traj_r_x[i]))  # Corrected yaw direction
+#     dx = 0.3 * np.cos(yaw)  # Scale arrows
+#     dy = 0.3 * np.sin(yaw)
+#     plt.arrow(x, y, dx, dy, head_width=0.1, head_length=0.15, fc="black", ec="black")
+
+# # Add circle for the target trajectory
+# theta = np.linspace(0, 2 * np.pi, 100)
+# circle_x = circle_radius * np.cos(theta)
+# circle_y = circle_radius * np.sin(theta)
+# plt.plot(circle_x, circle_y, '--', label='Target Circle', color="blue", linewidth=1.5)
+
+# # Plot settings
+# plt.xlabel("X Position (m)")
+# plt.ylabel("Y Position (m)")
+# plt.title("Vehicle Trajectory and Heading Visualization")
+# plt.axis("equal")
+# plt.legend()
+# plt.grid()
+
+# # Save the plot as an image
+# # plt.savefig("trajectory_and_heading.png", dpi=300)
+# plt.show()
+

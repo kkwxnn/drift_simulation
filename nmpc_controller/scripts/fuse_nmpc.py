@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 
 # Constants
-m = 4.78 # 1.98  # Mass of the vehicle (kg)
-Iz = 0.0665 # 0.24  # Moment of inertia around z-axis (kg*m^2)
-Lf = 0.18 # 0.125  # Distance from the center of gravity to the front axle (m)
-Lr = 0.18 # 0.125  # Distance from the center of gravity to the rear axle (m)
+m = 2.35 # 4.78  # Mass of the vehicle (kg)
+Iz = 0.045 # 0.0665  # Moment of inertia around z-axis (kg*m^2)
+Lf = 0.11372 # 0.18 # 0.125  # Distance from the center of gravity to the front axle (m)
+Lr = 0.14328 # 0.18 # 0.125  # Distance from the center of gravity to the rear axle (m)
 # Bf, Cf, Df = 7.4, 1.2, -2.27
 # Br, Cr, Dr = 7.4, 1.2, -2.27
 Bf, Cf, Df = 2.0, 1.2, -1.0
@@ -18,7 +18,7 @@ v_blend_max = 2.5
 # v_blend_max = 5.0
 
 # Define parameters
-dt = 0.1  # time step
+dt = 0.1 # 0.02  # time step
 
 circle_radius = 10.0  # Radius of the circle
 circle_center = np.array([0, 0])  # Center of the circle
@@ -149,7 +149,7 @@ def mpc_cost(U, *args):
 
 
 # MPC parameters
-N = 5  # Prediction horizon
+N = 3  # Prediction horizon
 state = np.array([10.0, 0, np.pi/2, 0, 0, 0, 0])  # Initial state 
 
 # Initial guess for controls
@@ -169,7 +169,7 @@ controls = []  # Store control inputs (Fx, Delta delta)
 time = [0]  # Time stamps
 targets = []  # Store dynamic targets
 
-for t in range(600):  # 1000
+for t in range(650):  # 1000
     # Get current target on the circle
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
@@ -201,30 +201,30 @@ targets = np.array(targets)
 
 ########################### Visualize in graph ##########################################
 
-# # Plot trajectory, target circle, yaw, and velocity direction
-# plt.figure(figsize=(10, 8))
-# plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
-# plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
+# Plot trajectory, target circle, yaw, and velocity direction
+plt.figure(figsize=(10, 8))
+plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
+plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
 
-# # Plot yaw direction
-# for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
-#     x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
-#     vx, vy = trajectory[i, 3], trajectory[i, 4]
+# Plot yaw direction
+for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
+    x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
+    vx, vy = trajectory[i, 3], trajectory[i, 4]
 
-#     # Yaw direction
-#     yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
-#     yaw_dy = 0.5 * np.sin(yaw)
-#     plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
+    # Yaw direction
+    yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
+    yaw_dy = 0.5 * np.sin(yaw)
+    plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
 
     
-# plt.xlabel('X position')
-# plt.ylabel('Y position')
-# plt.legend()
-# plt.title('MPC - Circular Trajectory with Yaw Visualization')
-# plt.grid()
-# plt.axis('equal')
-# plt.show()
-
+plt.xlabel('X position')
+plt.ylabel('Y position')
+plt.legend()
+plt.title('MPC - Circular Trajectory with Yaw Visualization')
+plt.grid()
+plt.axis('equal')
+plt.savefig("mpc_trajectory_plot.png")
+plt.show()
 
 # # Plot control inputs (delta and acceleration)
 # plt.figure(figsize=(10, 5))
@@ -235,6 +235,7 @@ targets = np.array(targets)
 # plt.legend()
 # plt.title('Control Inputs vs Time')
 # plt.grid()
+# plt.savefig("control_input_vs_time.png")
 # plt.show()
 
 ########################### Visualize in animation ##########################################
@@ -338,3 +339,7 @@ ani = animation.FuncAnimation(
 )
 
 plt.show()
+
+
+
+
