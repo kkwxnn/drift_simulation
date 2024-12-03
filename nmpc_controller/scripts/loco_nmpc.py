@@ -262,36 +262,36 @@ velocity_texts = [
 ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
 plt.show()
 
-# # Static plot of the trajectory and heading
-# plt.figure(figsize=(10, 8))
+# Static plot of the trajectory and heading
+plt.figure(figsize=(10, 8))
 
-# # Plot the trajectories
-# plt.plot(traj_cog_x, traj_cog_y, label="CoG Trajectory (Green)", color="green", linewidth=2)
-# plt.plot(traj_r_x, traj_r_y, label="Rear Trajectory (Red)", color="red", linewidth=2)
+# Plot the trajectories
+plt.plot(traj_cog_x, traj_cog_y, label="CoG Trajectory (Green)", color="green", linewidth=2)
+plt.plot(traj_r_x, traj_r_y, label="Rear Trajectory (Red)", color="red", linewidth=2)
 
-# # Add the heading arrows
-# for i in range(0, len(traj_cog_x), 10):  # Plot every 10th point for clarity
-#     x, y = traj_cog_x[i], traj_cog_y[i]
-#     yaw = wrap_to_pi(np.arctan2(traj_cog_y[i] - traj_r_y[i], traj_cog_x[i] - traj_r_x[i]))  # Corrected yaw direction
-#     dx = 0.3 * np.cos(yaw)  # Scale arrows
-#     dy = 0.3 * np.sin(yaw)
-#     plt.arrow(x, y, dx, dy, head_width=0.1, head_length=0.15, fc="black", ec="black")
+# Add the heading arrows
+for i in range(0, len(traj_cog_x), 10):  # Plot every 10th point for clarity
+    x, y = traj_cog_x[i], traj_cog_y[i]
+    yaw = wrap_to_pi(np.arctan2(traj_cog_y[i] - traj_r_y[i], traj_cog_x[i] - traj_r_x[i]))  # Corrected yaw direction
+    dx = 0.3 * np.cos(yaw)  # Scale arrows
+    dy = 0.3 * np.sin(yaw)
+    plt.arrow(x, y, dx, dy, head_width=0.1, head_length=0.15, fc="black", ec="black")
 
-# # Add circle for the target trajectory
-# theta = np.linspace(0, 2 * np.pi, 100)
-# circle_x = circle_radius * np.cos(theta)
-# circle_y = circle_radius * np.sin(theta)
-# plt.plot(circle_x, circle_y, '--', label='Target Circle', color="blue", linewidth=1.5)
+# Add circle for the target trajectory
+theta = np.linspace(0, 2 * np.pi, 100)
+circle_x = circle_radius * np.cos(theta)
+circle_y = circle_radius * np.sin(theta)
+plt.plot(circle_x, circle_y, '--', label='Target Circle', color="blue", linewidth=1.5)
 
-# # Plot settings
-# plt.xlabel("X Position (m)")
-# plt.ylabel("Y Position (m)")
-# plt.title("Vehicle Trajectory and Heading Visualization")
-# plt.axis("equal")
-# plt.legend()
-# plt.grid()
+# Plot settings
+plt.xlabel("X Position (m)")
+plt.ylabel("Y Position (m)")
+plt.title("Vehicle Trajectory and Heading Visualization")
+plt.axis("equal")
+plt.legend()
+plt.grid()
 
-# # Save the plot as an image
-# # plt.savefig("trajectory_and_heading.png", dpi=300)
-# plt.show()
+# Save the plot as an image
+# plt.savefig("trajectory_and_heading.png", dpi=300)
+plt.show()
 
