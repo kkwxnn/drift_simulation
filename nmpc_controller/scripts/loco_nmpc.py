@@ -25,7 +25,7 @@ steer_max = 0.698 # rad
 
 # Initialize plot
 fig, ax = plt.subplots()
-ax.axis([-2, 2, -2, 2])
+ax.axis([-2.5, 2.5, -2.5, 2.5])
 ax.set_aspect('equal')
 line, = ax.plot([], [], 'b-')
 traj_cog, = ax.plot([], [], 'g-')
@@ -135,8 +135,8 @@ def dynamics_finite(x, u, dt):
     k1 = dynamics(x, u)
     return x + dt * k1
 
-def circle_velocity_target(circle_radius, v_max):
-    vx_goal = v_max
+def circle_velocity_target(circle_radius, v):
+    vx_goal = v
     r_goal = vx_goal / circle_radius  # Yaw rate for circular motion
     return vx_goal, r_goal
 
@@ -145,7 +145,14 @@ def cost_function(u, x0, N, dt):
     # x0: initial state
     # N: prediction horizon
     # u: control inputs over the horizon (throttle, steering)
-    vx_goal, r_goal = circle_velocity_target(circle_radius, v_max)
+    vx = x0[3]
+
+    if vx >= 0:
+        v = v_max
+    elif vx < 0:
+        v = -v_max
+    
+    vx_goal, r_goal = circle_velocity_target(circle_radius, v)
     
     # Weighting factors for the velocity and yaw rate errors
     alpha_vx = 1.0
@@ -173,18 +180,18 @@ def cost_function(u, x0, N, dt):
 N = 3  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
-# u_initial = [-2.043563,    0.54835626,  0.12012904,  0.19187852, -1.50917811, -0.61073667] # Backward
+u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
 # u_initial = [0.84183408,  0.45151292,  0.7560102,   0.35675445, -2.09682026,  0.33119607] # Forward
 
 throttle_bound = (-v_max, v_max)  
 steer_bound = (-steer_max, steer_max)
 
-throttle_initial = np.random.uniform(throttle_bound[0], throttle_bound[1], N)
-steer_initial = np.random.uniform(steer_bound[0], steer_bound[1], N)
+# throttle_initial = np.random.uniform(throttle_bound[0], throttle_bound[1], N)
+# steer_initial = np.random.uniform(steer_bound[0], steer_bound[1], N)
 
-u_initial = np.zeros(2 * N) 
-u_initial[::2] = throttle_initial 
-u_initial[1::2] = steer_initial   
+# u_initial = np.zeros(2 * N) 
+# u_initial[::2] = throttle_initial 
+# u_initial[1::2] = steer_initial   
 
 print(u_initial) 
 

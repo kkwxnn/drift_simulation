@@ -135,8 +135,8 @@ def dynamics_finite(x, u, dt):
     k1 = dynamics(x, u)
     return x + dt * k1
 
-def circle_velocity_target(circle_radius, v_max):
-    vx_goal = v_max
+def circle_velocity_target(circle_radius, v):
+    vx_goal = v
     r_goal = vx_goal / circle_radius  # Yaw rate for circular motion
     return vx_goal, r_goal
 
@@ -145,7 +145,15 @@ def cost_function(u, x0, N, dt):
     # x0: initial state
     # N: prediction horizon
     # u: control inputs over the horizon (throttle, steering)
-    vx_goal, r_goal = circle_velocity_target(circle_radius, v_max)
+
+    vx = x0[3]
+
+    if vx >= 0:
+        v = v_max
+    elif vx < 0:
+        v = -v_max
+    
+    vx_goal, r_goal = circle_velocity_target(circle_radius, v)
     
     # Weighting factors for the velocity and yaw rate errors
     alpha_vx = 1.0
@@ -173,7 +181,7 @@ def cost_function(u, x0, N, dt):
 N = 3  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
-# u_initial = [-2.043563,    0.54835626,  0.12012904,  0.19187852, -1.50917811, -0.61073667] # Backward
+# u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
 u_initial = [0.84183408,  0.45151292,  0.7560102,   0.35675445, -2.09682026,  0.33119607] # Forward
 
 throttle_bound = (-v_max, v_max)  
@@ -298,7 +306,14 @@ def plot_simulation_results():
 
     # Plot v_x and v_y
     axs[0, 0].plot(vx_data, label="v_x (m/s)")
-    axs[0, 0].axhline(y=v_max, color='r', linestyle='--', label="v_x_goal")
+    
+    # Determine the direction of motion (forward or backward)
+    if vx_data[-1] >= 0:
+        vx_goal = v_max  # Forward velocity goal
+    else:
+        vx_goal = -v_max  # Backward velocity goal
+    axs[0, 0].axhline(y=vx_goal, color='r', linestyle='--', label="v_x_goal")
+    
     axs[0, 0].set_ylabel("v_x (m/s)")
     axs[0, 0].legend()
     axs[0, 0].grid()
@@ -315,7 +330,14 @@ def plot_simulation_results():
     axs[1, 0].grid()
 
     axs[1, 1].plot(r_data, label="Yaw rate (rad/s)")
-    axs[1, 1].axhline(y=v_max/circle_radius, color='r', linestyle='--', label="r_goal")
+    
+    # Determine the yaw rate goal based on the current motion direction
+    if vx_data[-1] >= 0:
+        r_goal = vx_goal / circle_radius  # Forward yaw rate goal
+    else:
+        r_goal = vx_goal / circle_radius  # Backward yaw rate goal (same calculation, opposite direction)
+    axs[1, 1].axhline(y=r_goal, color='r', linestyle='--', label="r_goal")
+    
     axs[1, 1].set_ylabel("Yaw rate (rad/s)")
     axs[1, 1].legend()
     axs[1, 1].grid()
@@ -326,15 +348,9 @@ def plot_simulation_results():
     axs[2, 0].legend()
     axs[2, 0].grid()
 
-    # # Plot steering angle
-    # axs[2, 1].plot(steering_angle_data, label="Steering angle (rad)")
-    # axs[2, 1].set_ylabel("Steering angle (rad)")
-    # axs[2, 1].legend()
-    # axs[2, 1].grid()
-
     # Plot Control Input
-    axs[2, 1].plot(steering_angle_data, label="Steering angle (rad)")
     axs[2, 1].plot(vx_cmd_data, label="v_x command (m/s)")
+    axs[2, 1].plot(steering_angle_data, label="Steering angle (rad)")
     axs[2, 1].set_ylabel("Control Input")
     axs[2, 1].legend()
     axs[2, 1].grid()
@@ -342,6 +358,7 @@ def plot_simulation_results():
     plt.tight_layout()
     plt.subplots_adjust(top=0.9)
     plt.show()
+
 
 # Start the animation
 ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
