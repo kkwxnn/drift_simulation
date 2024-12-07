@@ -48,41 +48,45 @@ def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
 def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_alpha, alpha):
-    # longitude wheel slip
-    if Ux_cmd == Ux:
+    # Longitudinal wheel slip
+    if abs(Ux_cmd - Ux) < 1e-6:  # Ux_cmd approximately equal to Ux
         K = 0
-    elif Ux == 0:
+    elif abs(Ux) < 1e-6:  # Handle Ux = 0
         Fx = np.sign(Ux_cmd) * mu * Fz
         Fy = 0
         return Fx, Fy
     else:
         K = (Ux_cmd - Ux) / abs(Ux)
 
-    # instead of avoiding -1, now look for positive equivalent
+    # Handle K < 0 case
     reverse = 1
     if K < 0:
         reverse = -1
         K = abs(K)
 
-    # alpha > pi/2 cannot be adapted to this formula
-    # because of the use of tan(). Use the equivalent angle instead.
+    # Alpha > pi/2 adaptation
     if abs(alpha) > np.pi / 2:
         alpha = (np.pi - abs(alpha)) * np.sign(alpha)
 
-    gamma = np.sqrt(C_x**2 * (K / (1 + K))**2 + C_alpha**2 * (np.tan(alpha) / (1 + K))**2)
+    # Calculate gamma with safeguard for K = -1
+    gamma = np.sqrt(C_x**2 * (K / max(1 + K, 1e-6))**2 + C_alpha**2 * (np.tan(alpha) / max(1 + K, 1e-6))**2)
+
+    # Friction model for gamma <= 3 * mu * Fz
     if gamma <= 3 * mu * Fz:
         F = gamma - (2 - mu_slide / mu) * gamma**2 / (3 * mu * Fz) + \
             (1 - (2 / 3) * (mu_slide / mu)) * gamma**3 / (9 * mu**2 * Fz**2)
     else:
-        # more accurate modeling with peak friction value
         F = mu_slide * Fz
 
+    # Compute forces with safeguard for gamma = 0
     if gamma == 0:
         Fx = Fy = 0
     else:
-        Fx = C_x / gamma * (K / (1 + K)) * F * reverse
-        Fy = -C_alpha / gamma * (np.tan(alpha) / (1 + K)) * F
+        Fx = C_x / max(gamma, 1e-6) * (K / max(1 + K, 1e-6)) * F * reverse
+        Fy = -C_alpha / max(gamma, 1e-6) * (np.tan(alpha) / max(1 + K, 1e-6)) * F
+
     return Fx, Fy
+
 
 def dynamics(x, u):
     pos_x, pos_y, pos_phi = x[:3]
@@ -180,8 +184,9 @@ def cost_function(u, x0, N, dt):
 N = 3  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
-u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
+# u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
 # u_initial = [0.84183408,  0.45151292,  0.7560102,   0.35675445, -2.09682026,  0.33119607] # Forward
+u_initial = [0, 0, 0, 0, 0, 0]
 
 throttle_bound = (-v_max, v_max)  
 steer_bound = (-steer_max, steer_max)
