@@ -13,11 +13,11 @@ b = 0.14328
 a = L - b
 G_front = m * g * b / L
 G_rear = m * g * a / L
-C_x = 116
-C_alpha = 197
+C_x = 116 # tire longitudinal stiffness
+C_y = 197 # tire lateral stiffness
 Iz = 0.045
-mu = 1.31 # Typical dry road friction
-mu_spin = 0.55 # Friction when tires are spinning
+mu = 1.31 # mu_peak
+mu_spin = 0.55 # spinning coefficient
 
 circle_radius = 1.5
 v_max = 2.5 # m/s
@@ -47,7 +47,7 @@ x = [0.0, 0.0, np.pi/2, 0.0, 0.0, 0.0]
 def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
-def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_alpha, alpha):
+def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_y, alpha):
     # Longitudinal wheel slip
     if abs(Ux_cmd - Ux) < 1e-6:  # Ux_cmd approximately equal to Ux
         K = 0
@@ -69,7 +69,7 @@ def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_alpha, alpha):
         alpha = (np.pi - abs(alpha)) * np.sign(alpha)
 
     # Calculate gamma with safeguard for K = -1
-    gamma = np.sqrt(C_x**2 * (K / max(1 + K, 1e-6))**2 + C_alpha**2 * (np.tan(alpha) / max(1 + K, 1e-6))**2)
+    gamma = np.sqrt(C_x**2 * (K / max(1 + K, 1e-6))**2 + C_y**2 * (np.tan(alpha) / max(1 + K, 1e-6))**2)
 
     # Friction model for gamma <= 3 * mu * Fz
     if gamma <= 3 * mu * Fz:
@@ -83,7 +83,7 @@ def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_alpha, alpha):
         Fx = Fy = 0
     else:
         Fx = C_x / max(gamma, 1e-6) * (K / max(1 + K, 1e-6)) * F * reverse
-        Fy = -C_alpha / max(gamma, 1e-6) * (np.tan(alpha) / max(1 + K, 1e-6)) * F
+        Fy = -C_y / max(gamma, 1e-6) * (np.tan(alpha) / max(1 + K, 1e-6)) * F
 
     return Fx, Fy
 
@@ -110,8 +110,8 @@ def dynamics(x, u):
     # safety that keep alpha in valid range
     alpha_F, alpha_R = wrap_to_pi(alpha_F), wrap_to_pi(alpha_R)
 
-    Fxf, Fyf = tire_dyn(Ux, Ux, mu, mu_spin, G_front, C_x, C_alpha, alpha_F)
-    Fxr, Fyr = tire_dyn(Ux, Ux_cmd, mu, mu_spin, G_rear, C_x, C_alpha, alpha_R)
+    Fxf, Fyf = tire_dyn(Ux, Ux, mu, mu_spin, G_front, C_x, C_y, alpha_F)
+    Fxr, Fyr = tire_dyn(Ux, Ux_cmd, mu, mu_spin, G_rear, C_x, C_y, alpha_R)
 
     # Vehicle Dynamics
     r_dot = (a * Fyf * np.cos(delta) - b * Fyr) / Iz
