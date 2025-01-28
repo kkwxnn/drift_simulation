@@ -181,22 +181,22 @@ def cost_function(u, x0, N, dt):
     return cost
 
 # MPC setup
-N = 3  # prediction horizon
+N = 50  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
 # u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
 # u_initial = [0.84183408,  0.45151292,  0.7560102,   0.35675445, -2.09682026,  0.33119607] # Forward
-u_initial = [0, 0, 0, 0, 0, 0]
+# u_initial = [0, 0, 0, 0, 0, 0]
 
 throttle_bound = (-v_max, v_max)  
 steer_bound = (-steer_max, steer_max)
 
-# throttle_initial = np.random.uniform(throttle_bound[0], throttle_bound[1], N)
-# steer_initial = np.random.uniform(steer_bound[0], steer_bound[1], N)
+throttle_initial = np.random.uniform(throttle_bound[0], throttle_bound[1], N)
+steer_initial = np.random.uniform(steer_bound[0], steer_bound[1], N)
 
-# u_initial = np.zeros(2 * N) 
-# u_initial[::2] = throttle_initial 
-# u_initial[1::2] = steer_initial   
+u_initial = np.zeros(2 * N) 
+u_initial[::2] = throttle_initial 
+u_initial[1::2] = steer_initial   
 
 print(u_initial) 
 
