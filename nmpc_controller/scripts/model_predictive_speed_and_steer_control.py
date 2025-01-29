@@ -18,8 +18,8 @@ from utils.angle import angle_mod
 
 from PathPlanning.CubicSpline import cubic_spline_planner
 
-NX = 4  # x = x, y, v, yaw
-NU = 2  # a = [accel, steer]
+NX = 7  # x = x, y, yaw, vx, vy, r, delta
+NU = 2  # u = [Fx, Delta_delta]
 T = 5  # horizon length
 
 # mpc parameters
@@ -35,24 +35,26 @@ MAX_TIME = 500.0  # max simulation time
 MAX_ITER = 3  # Max iteration
 DU_TH = 0.1  # iteration finish param
 
-TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
+TARGET_SPEED = 1.5  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
 
 DT = 0.2  # [s] time tick
 
 # Vehicle parameters
-LENGTH = 4.5  # [m]
-WIDTH = 2.0  # [m]
-BACKTOWHEEL = 1.0  # [m]
-WHEEL_LEN = 0.3  # [m]
-WHEEL_WIDTH = 0.2  # [m]
-TREAD = 0.7  # [m]
-WB = 2.5  # [m]
+LENGTH = 0.3855  # [m]
+WIDTH = 0.1542  # [m]
+BACKTOWHEEL = 0.15  # [m]
+WHEEL_LEN = 0.05  # [m]
+WHEEL_WIDTH = 0.03  # [m]
+TREAD = 0.12  # [m]
+WB = 0.257  # [m]
+MASS = 2.35 # [kg]
+Iz = 0.045 # [kg mm]
 
 MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
 MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
-MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
+MAX_SPEED = 2.5 # 55.0 / 3.6  # maximum speed [m/s]
+MIN_SPEED = 0.1 # -20.0 / 3.6  # minimum speed [m/s]
 MAX_ACCEL = 1.0  # maximum accel [m/ss]
 
 show_animation = True
@@ -63,11 +65,14 @@ class State:
     vehicle state class
     """
 
-    def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, vx=0.0, vy=0.0, r=0.0, delta=0.0):
         self.x = x
         self.y = y
         self.yaw = yaw
-        self.v = v
+        self.vx = vx
+        self.vy = vy
+        self.r = r
+        self.delta = delta
         self.predelta = None
 
 
