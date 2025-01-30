@@ -5,7 +5,7 @@ import scipy.optimize as opt
 
 # Vehicle parameters 
 # Constants
-dt = 0.02
+dt = 0.2
 m = 2.35
 L = 0.257
 g = 9.81
@@ -181,7 +181,7 @@ def cost_function(u, x0, N, dt):
     return cost
 
 # MPC setup
-N = 50  # prediction horizon
+N = 5  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
 # u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward

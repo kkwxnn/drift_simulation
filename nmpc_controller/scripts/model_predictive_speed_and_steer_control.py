@@ -18,8 +18,8 @@ from utils.angle import angle_mod
 
 from PathPlanning.CubicSpline import cubic_spline_planner
 
-NX = 7  # x = x, y, yaw, vx, vy, r, delta
-NU = 2  # u = [Fx, Delta_delta]
+NX = 6  # x = x, y, yaw, vx, vy, r
+NU = 2  # u = [v_cmd, delta]
 T = 5  # horizon length
 
 # mpc parameters
@@ -65,14 +65,13 @@ class State:
     vehicle state class
     """
 
-    def __init__(self, x=0.0, y=0.0, yaw=0.0, vx=0.0, vy=0.0, r=0.0, delta=0.0):
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, vx=0.0, vy=0.0, r=0.0):
         self.x = x
         self.y = y
         self.yaw = yaw
         self.vx = vx
         self.vy = vy
         self.r = r
-        self.delta = delta
         self.predelta = None
 
 
