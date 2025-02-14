@@ -18,7 +18,7 @@
 #
 
 from casadi import *
-import numpy as NP
+import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd 
 

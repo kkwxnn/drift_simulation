@@ -5,7 +5,7 @@ import scipy.optimize as opt
 
 # Vehicle parameters 
 # Constants
-dt = 0.2
+dt = 0.05
 m = 2.35
 L = 0.257
 g = 9.81
@@ -86,7 +86,6 @@ def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_y, alpha):
         Fy = -C_y / max(gamma, 1e-6) * (np.tan(alpha) / max(1 + K, 1e-6)) * F
 
     return Fx, Fy
-
 
 def dynamics(x, u):
     pos_x, pos_y, pos_phi = x[:3]
@@ -181,7 +180,7 @@ def cost_function(u, x0, N, dt):
     return cost
 
 # MPC setup
-N = 5  # prediction horizon
+N = 3  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
 # u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
@@ -275,6 +274,7 @@ ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
 plt.show()
 
 ################################# Plot ####################################################
+
 # Static plot of the trajectory and heading
 plt.figure(figsize=(10, 8))
 

@@ -13,11 +13,11 @@ b = 0.14328
 a = L - b
 G_front = m * g * b / L
 G_rear = m * g * a / L
-C_x = 116
-C_alpha = 197
+C_x = 116 # tire longitudinal stiffness
+C_y = 197 # tire lateral stiffness
 Iz = 0.045
-mu = 1.31 # Typical dry road friction
-mu_spin = 0.55 # Friction when tires are spinning
+mu = 1.31 # mu_peak
+mu_spin = 0.55 # spinning coefficient
 
 circle_radius = 1.5
 v_max = 2.5 # m/s
@@ -25,7 +25,7 @@ steer_max = 0.698 # rad
 
 # Initialize plot
 fig, ax = plt.subplots()
-ax.axis([-2, 2, -2, 2])
+ax.axis([-2.5, 2.5, -2.5, 2.5])
 ax.set_aspect('equal')
 line, = ax.plot([], [], 'b-')
 traj_cog, = ax.plot([], [], 'g-')
@@ -47,42 +47,46 @@ x = [0.0, 0.0, np.pi/2, 0.0, 0.0, 0.0]
 def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
-def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_alpha, alpha):
-    # longitude wheel slip
-    if Ux_cmd == Ux:
+def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_y, alpha):
+    # Longitudinal wheel slip
+    if abs(Ux_cmd - Ux) < 1e-6:  # Ux_cmd approximately equal to Ux
         K = 0
-    elif Ux == 0:
+    elif abs(Ux) < 1e-6:  # Handle Ux = 0
         Fx = np.sign(Ux_cmd) * mu * Fz
         Fy = 0
         return Fx, Fy
     else:
         K = (Ux_cmd - Ux) / abs(Ux)
 
-    # instead of avoiding -1, now look for positive equivalent
+    # Handle K < 0 case
     reverse = 1
     if K < 0:
         reverse = -1
         K = abs(K)
 
-    # alpha > pi/2 cannot be adapted to this formula
-    # because of the use of tan(). Use the equivalent angle instead.
+    # Alpha > pi/2 adaptation
     if abs(alpha) > np.pi / 2:
         alpha = (np.pi - abs(alpha)) * np.sign(alpha)
 
-    gamma = np.sqrt(C_x**2 * (K / (1 + K))**2 + C_alpha**2 * (np.tan(alpha) / (1 + K))**2)
+    # Calculate gamma with safeguard for K = -1
+    gamma = np.sqrt(C_x**2 * (K / max(1 + K, 1e-6))**2 + C_y**2 * (np.tan(alpha) / max(1 + K, 1e-6))**2)
+
+    # Friction model for gamma <= 3 * mu * Fz
     if gamma <= 3 * mu * Fz:
         F = gamma - (2 - mu_slide / mu) * gamma**2 / (3 * mu * Fz) + \
             (1 - (2 / 3) * (mu_slide / mu)) * gamma**3 / (9 * mu**2 * Fz**2)
     else:
-        # more accurate modeling with peak friction value
         F = mu_slide * Fz
 
+    # Compute forces with safeguard for gamma = 0
     if gamma == 0:
         Fx = Fy = 0
     else:
-        Fx = C_x / gamma * (K / (1 + K)) * F * reverse
-        Fy = -C_alpha / gamma * (np.tan(alpha) / (1 + K)) * F
+        Fx = C_x / max(gamma, 1e-6) * (K / max(1 + K, 1e-6)) * F * reverse
+        Fy = -C_y / max(gamma, 1e-6) * (np.tan(alpha) / max(1 + K, 1e-6)) * F
+
     return Fx, Fy
+
 
 def dynamics(x, u):
     pos_x, pos_y, pos_phi = x[:3]
@@ -106,8 +110,8 @@ def dynamics(x, u):
     # safety that keep alpha in valid range
     alpha_F, alpha_R = wrap_to_pi(alpha_F), wrap_to_pi(alpha_R)
 
-    Fxf, Fyf = tire_dyn(Ux, Ux, mu, mu_spin, G_front, C_x, C_alpha, alpha_F)
-    Fxr, Fyr = tire_dyn(Ux, Ux_cmd, mu, mu_spin, G_rear, C_x, C_alpha, alpha_R)
+    Fxf, Fyf = tire_dyn(Ux, Ux, mu, mu_spin, G_front, C_x, C_y, alpha_F)
+    Fxr, Fyr = tire_dyn(Ux, Ux_cmd, mu, mu_spin, G_rear, C_x, C_y, alpha_R)
 
     # Vehicle Dynamics
     r_dot = (a * Fyf * np.cos(delta) - b * Fyr) / Iz
@@ -145,7 +149,6 @@ def cost_function(u, x0, N, dt):
     # x0: initial state
     # N: prediction horizon
     # u: control inputs over the horizon (throttle, steering)
-
     vx = x0[3]
 
     if vx >= 0:
@@ -178,11 +181,12 @@ def cost_function(u, x0, N, dt):
     return cost
 
 # MPC setup
-N = 10  # prediction horizon
+N = 3  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
 # u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
 # u_initial = [0.84183408,  0.45151292,  0.7560102,   0.35675445, -2.09682026,  0.33119607] # Forward
+# u_initial = [0, 0, 0, 0, 0, 0]
 
 throttle_bound = (-v_max, v_max)  
 steer_bound = (-steer_max, steer_max)
@@ -224,21 +228,6 @@ heading_arrow = ax.quiver(0, 0, 0, 0, angles="xy", scale_units="xy", scale=3, co
 # Legend for trajectories
 ax.legend([traj_cog, traj_r], ["CoG Trajectory (Green)", "Rear Trajectory (Red)"], loc="upper right")
 
-# Add data lists to store values for subplots
-vx_data = []
-vy_data = []
-yaw_data = []
-r_data = []
-slip_angle_data = []
-steering_angle_data = []
-vx_cmd_data = []
-
-velocity_texts = [
-    ax.text(0.05, 0.95, "v_x: 0.00", transform=ax.transAxes, color="black", fontsize=10),
-    ax.text(0.05, 0.90, "v_y: 0.00", transform=ax.transAxes, color="black", fontsize=10)
-]
-
-# Modify the update_plot function to collect data for subplots
 def update_plot(frame):
     global x
     u = mpc_control(x)  # Get control inputs from MPC
@@ -246,26 +235,7 @@ def update_plot(frame):
 
     pos_x, pos_y, pos_phi = x[:3]
     v_x, v_y = x[3], x[4]  # Assuming v_x and v_y are at index 3 and 4 of the state vector
-    r = x[5]  # Yaw rate
 
-    # Calculate slip angle for front and rear
-    alpha_F = np.arctan((v_y + a * r) / abs(v_x))  # Front slip angle
-    alpha_R = np.arctan((v_y - b * r) / abs(v_x))  # Rear slip angle
-    
-    # Get the current input
-    vx_cmd = u[0]
-    steering_angle = u[1]
-
-    # Append the data for the subplots
-    vx_data.append(v_x)
-    vy_data.append(v_y)
-    yaw_data.append(pos_phi)
-    r_data.append(r)
-    slip_angle_data.append(alpha_F)  # Assuming you want the front slip angle
-    steering_angle_data.append(steering_angle)
-    vx_cmd_data.append(vx_cmd)
-
-    # Update the trajectory and heading arrow as before
     A = np.array([[np.cos(pos_phi), -np.sin(pos_phi), pos_x],
                   [np.sin(pos_phi), np.cos(pos_phi), pos_y],
                   [0, 0, 1]])
@@ -273,6 +243,7 @@ def update_plot(frame):
     CoG_n = A @ CoG
     rear_n = A @ r_axle
 
+    # Update the plot
     line.set_data(pos[0, :], pos[1, :])
 
     # Append new points to the trajectory lists
@@ -292,77 +263,49 @@ def update_plot(frame):
     # Update the static velocity annotations (in top-left corner)
     velocity_texts[0].set_text(f"v_x: {v_x:.2f}")
     velocity_texts[1].set_text(f"v_y: {v_y:.2f}")
-    
-    # Stop after N frames (e.g., 500 frames)
-    if frame == 200:
-        plt.close()  # Close the plot window
-        plot_simulation_results()  # Call the function to plot after the animation
 
-# Create the plotting function for subplots
-def plot_simulation_results():
-    # Create subplots for the simulation data
-    fig, axs = plt.subplots(3, 2, figsize=(12, 10))
-    fig.suptitle("Vehicle Dynamics during Simulation", fontsize=16)
-
-    # Plot v_x and v_y
-    axs[0, 0].plot(vx_data, label="v_x (m/s)")
-    
-    # Determine the direction of motion (forward or backward)
-    if vx_data[-1] >= 0:
-        vx_goal = v_max  # Forward velocity goal
-    else:
-        vx_goal = -v_max  # Backward velocity goal
-    axs[0, 0].axhline(y=vx_goal, color='r', linestyle='--', label="v_x_goal")
-    
-    axs[0, 0].set_ylabel("v_x (m/s)")
-    axs[0, 0].legend()
-    axs[0, 0].grid()
-
-    axs[0, 1].plot(vy_data, label="v_y (m/s)")
-    axs[0, 1].set_ylabel("v_y (m/s)")
-    axs[0, 1].legend()
-    axs[0, 1].grid()
-
-    # Plot yaw angle and yaw rate (r)
-    axs[1, 0].plot(yaw_data, label="Yaw (rad)")
-    axs[1, 0].set_ylabel("Yaw (rad)")
-    axs[1, 0].legend()
-    axs[1, 0].grid()
-
-    axs[1, 1].plot(r_data, label="Yaw rate (rad/s)")
-    
-    # Determine the yaw rate goal based on the current motion direction
-    if vx_data[-1] >= 0:
-        r_goal = vx_goal / circle_radius  # Forward yaw rate goal
-    else:
-        r_goal = vx_goal / circle_radius  # Backward yaw rate goal (same calculation, opposite direction)
-    axs[1, 1].axhline(y=r_goal, color='r', linestyle='--', label="r_goal")
-    
-    axs[1, 1].set_ylabel("Yaw rate (rad/s)")
-    axs[1, 1].legend()
-    axs[1, 1].grid()
-
-    # Plot slip angle
-    axs[2, 0].plot(slip_angle_data, label="Slip angle (rad)")
-    axs[2, 0].set_ylabel("Slip angle (rad)")
-    axs[2, 0].legend()
-    axs[2, 0].grid()
-
-    # Plot Control Input
-    axs[2, 1].plot(vx_cmd_data, label="v_x command (m/s)")
-    axs[2, 1].plot(steering_angle_data, label="Steering angle (rad)")
-    axs[2, 1].set_ylabel("Control Input")
-    axs[2, 1].legend()
-    axs[2, 1].grid()
-
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
-    plt.show()
-
+# Initialize a list to store the velocity text annotations
+velocity_texts = [
+    ax.text(0.05, 0.95, "v_x: 0.00", transform=ax.transAxes, color="black", fontsize=10),
+    ax.text(0.05, 0.90, "v_y: 0.00", transform=ax.transAxes, color="black", fontsize=10)
+]
 
 # Start the animation
 ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
 plt.show()
 
+################################# Plot ####################################################
 
+# Static plot of the trajectory and heading
+plt.figure(figsize=(10, 8))
+
+# Plot the trajectories
+plt.plot(traj_cog_x, traj_cog_y, label="CoG Trajectory (Green)", color="green", linewidth=2)
+plt.plot(traj_r_x, traj_r_y, label="Rear Trajectory (Red)", color="red", linewidth=2)
+
+# Add the heading arrows
+for i in range(0, len(traj_cog_x), 10):  # Plot every 10th point for clarity
+    x, y = traj_cog_x[i], traj_cog_y[i]
+    yaw = wrap_to_pi(np.arctan2(traj_cog_y[i] - traj_r_y[i], traj_cog_x[i] - traj_r_x[i]))  # Corrected yaw direction
+    dx = 0.3 * np.cos(yaw)  # Scale arrows
+    dy = 0.3 * np.sin(yaw)
+    plt.arrow(x, y, dx, dy, head_width=0.1, head_length=0.15, fc="black", ec="black")
+
+# Add circle for the target trajectory
+theta = np.linspace(0, 2 * np.pi, 100)
+circle_x = circle_radius * np.cos(theta)
+circle_y = circle_radius * np.sin(theta)
+plt.plot(circle_x, circle_y, '--', label='Target Circle', color="blue", linewidth=1.5)
+
+# Plot settings
+plt.xlabel("X Position (m)")
+plt.ylabel("Y Position (m)")
+plt.title("Vehicle Trajectory and Heading Visualization")
+plt.axis("equal")
+plt.legend()
+plt.grid()
+
+# Save the plot as an image
+plt.savefig("trajectory_and_heading.png", dpi=300)
+plt.show()
 
