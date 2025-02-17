@@ -5,7 +5,7 @@ import scipy.optimize as opt
 
 # Vehicle parameters 
 # Constants
-dt = 0.05
+dt = 0.02
 m = 2.35
 L = 0.257
 g = 9.81
@@ -275,7 +275,6 @@ ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
 plt.show()
 
 ################################# Plot ####################################################
-
 # Static plot of the trajectory and heading
 plt.figure(figsize=(10, 8))
 
@@ -308,4 +307,3 @@ plt.grid()
 # Save the plot as an image
 plt.savefig("trajectory_and_heading.png", dpi=300)
 plt.show()
-
