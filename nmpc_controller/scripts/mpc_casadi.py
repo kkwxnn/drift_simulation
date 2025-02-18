@@ -36,7 +36,7 @@ Iz = 0.045
 mu = 1.31
 mu_slide = 0.55
 
-dt = 0.05  # 20 Hz
+dt = 0.02
 
 # Declare variables
 x = MX.sym('x')
@@ -218,6 +218,12 @@ g = []
 lbg = []
 ubg = []
 
+# Define the bounds for vx_cmd and steer
+vx_cmd_lb = 0.0
+vx_cmd_ub = 40.0
+steer_lb = -0.698
+steer_ub = 0.698
+
 # ref_data = pd.read_csv('resampled_vehicle_data.csv')
 # vx_ref = ref_data['local_vx'].values
 # yawrate_ref = ref_data['yaw_rate'].values
@@ -229,9 +235,14 @@ for k in range(N):
     # New NLP variable for the control
     Uk = MX.sym('U_' + str(k),2)
     w += [Uk]
-    lbx += [ 0.0, -0.698] # bound [vx_cmd, steer]
-    ubx += [ 40.0,  0.698]
-    w0 += [0,0]
+    lbx += [vx_cmd_lb, steer_lb]  # Bound [vx_cmd, steer] (lower bound)
+    ubx += [vx_cmd_ub, steer_ub]   # Bound [vx_cmd, steer] (upper bound)
+    # w0 += [0,0]
+
+    # Random initial guess within bounds for [vx_cmd, steer]
+    random_vx_cmd = np.random.uniform(vx_cmd_lb, vx_cmd_ub)
+    random_steer = np.random.uniform(steer_lb, steer_ub)
+    w0 += [random_vx_cmd, random_steer]  # Random initial guess for [vx_cmd, steer]
 
     # Integrate till the end of the interval
     # vxg = target_csv[0, k]  # Longitudinal velocity reference for time step k
@@ -276,3 +287,88 @@ sol = solver(x0=w0, lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg)
 w_opt = sol['x']
 
 print(w_opt)
+
+###############################
+
+# # Extract the optimal control inputs and states from the result
+# w_opt_values = np.array(w_opt).flatten()
+
+# # Extract the optimal control inputs for each time step
+# vx_cmd_opt = w_opt_values[::2]  # Every other value, starting from index 0 (vx_cmd)
+# steer_opt = w_opt_values[1::2]  # Every other value, starting from index 1 (steer)
+
+# # You can now extract the state values from the integrator F for each time step
+# states = []  # Store the states (x, y, yaw, vx, vy, yawrate)
+# Xk = np.array([0, 0, 0, 1.0, 1.0, 1.0])  # Initial state
+# for k in range(N):
+#     u = np.array([vx_cmd_opt[k], steer_opt[k]])  # Optimal control input
+#     Fk = F(x0=Xk, p=u, u=[v_max, 0])  # Use your target or reference here
+#     Xk = np.array(Fk['xf']).flatten()  # Update state
+#     states.append(Xk)
+
+# states = np.array(states)
+
+# # Extract individual states
+# x_opt = states[:, 0]
+# y_opt = states[:, 1]
+# yaw_opt = states[:, 2]
+# vx_opt = states[:, 3]
+# vy_opt = states[:, 4]
+# yawrate_opt = states[:, 5]
+
+# # Visualization: Plot the Trajectory in the x-y plane
+# plt.figure(figsize=(10, 6))
+# plt.plot(x_opt, y_opt, label="Vehicle Path")
+# plt.title("Vehicle Trajectory (x vs y)")
+# plt.xlabel("x (m)")
+# plt.ylabel("y (m)")
+# plt.grid(True)
+# plt.legend()
+# plt.show()
+
+# # Plot Control Inputs Over Time
+# time = np.arange(N) * dt  # Time vector
+
+# # Plot vx_cmd (Longitudinal Velocity)
+# plt.figure(figsize=(10, 6))
+# plt.plot(time, vx_cmd_opt, label="Longitudinal Velocity (vx_cmd)")
+# plt.title("Control Input: Longitudinal Velocity (vx_cmd)")
+# plt.xlabel("Time (s)")
+# plt.ylabel("vx_cmd (m/s)")
+# plt.grid(True)
+# plt.legend()
+# plt.show()
+
+# # Plot steer (Steering Angle)
+# plt.figure(figsize=(10, 6))
+# plt.plot(time, steer_opt, label="Steering Angle (steer)")
+# plt.title("Control Input: Steering Angle (steer)")
+# plt.xlabel("Time (s)")
+# plt.ylabel("steer (rad)")
+# plt.grid(True)
+# plt.legend()
+# plt.show()
+
+# # Plot Vehicle Speed (vx) and Yaw Rate (yawrate)
+# plt.figure(figsize=(10, 6))
+
+# # Plot vx (Longitudinal Speed)
+# plt.subplot(2, 1, 1)
+# plt.plot(time, vx_opt, label="Longitudinal Speed (vx)")
+# plt.title("Vehicle Speed over Time")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Speed (vx) (m/s)")
+# plt.grid(True)
+# plt.legend()
+
+# # Plot yawrate (Yaw Rate)
+# plt.subplot(2, 1, 2)
+# plt.plot(time, yawrate_opt, label="Yaw Rate (yawrate)", color='r')
+# plt.title("Vehicle Yaw Rate over Time")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Yaw Rate (rad/s)")
+# plt.grid(True)
+# plt.legend()
+
+# plt.tight_layout()
+# plt.show()

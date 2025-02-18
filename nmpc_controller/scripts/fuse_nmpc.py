@@ -74,7 +74,7 @@ def drift_model(state, control, dt):
     # Fyf = 0.0
     # Fyr = 0.0
 
-    B = 0.01
+    B = 0.1
     # Dynamic model equations
     x_dot_dyn = vx * np.cos(yaw) - vy * np.sin(yaw)
     y_dot_dyn = vx * np.sin(yaw) + vy * np.cos(yaw)
@@ -149,7 +149,7 @@ def mpc_cost(U, *args):
 
 
 # MPC parameters
-N = 3  # Prediction horizon
+N = 3 #10 # 3  # Prediction horizon
 state = np.array([10.0, 0, np.pi/2, 0, 0, 0, 0])  # Initial state 
 
 # Initial guess for controls
@@ -292,8 +292,8 @@ def update(frame):
     target = targets[frame]
     target_circle_line.set_data(targets[:, 0], targets[:, 1])  # Keep target circle visible
 
-    # Update target position marker at the current frame
-    target_position_marker.set_data(target[0], target[1])
+    # # Update target position marker at the current frame
+    # target_position_marker.set_data(target[0], target[1])
 
     # Get the relevant values for display
     vx = trajectory[frame, 3]
@@ -325,10 +325,10 @@ def update(frame):
         ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
         ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
 
-    return trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, Fx_text, Fyf_text, Fyr_text, alpha_f_text, alpha_r_text, cost_text, target_circle_line, target_position_marker
+    return trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, Fx_text, Fyf_text, Fyr_text, alpha_f_text, alpha_r_text, cost_text, target_circle_line
 
 # Add target position marker to show the current target
-target_position_marker, = ax.plot([], [], 'go', label='Target Position')
+# target_position_marker, = ax.plot([], [], 'go', label='Target Position')
 
 # Adjust legend position to avoid overlap with the text
 ax.legend(loc='upper left', bbox_to_anchor=(1, 1), borderaxespad=0.)
