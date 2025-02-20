@@ -20,7 +20,7 @@ from PathPlanning.CubicSpline import cubic_spline_planner
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
-T = 50  # horizon length
+T = 5  # horizon length
 
 # mpc parameters
 R = np.diag([0.01, 0.01])  # input cost matrix
@@ -38,7 +38,7 @@ DU_TH = 0.1  # iteration finish param
 TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
 
-DT = 0.02  # [s] time tick
+DT = 0.2  # [s] time tick
 
 # Vehicle parameters
 LENGTH = 4.5  # [m]
