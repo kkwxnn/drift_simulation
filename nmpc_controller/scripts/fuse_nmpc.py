@@ -128,11 +128,11 @@ def mpc_cost(U, *args):
     # Prediction loop for the horizon N
     for i in range(N):
         # Predict the next state using the drift model
-        state = drift_model(state, U[2 * i:2 * i + 2], dt)
+        state = drift_model(state, U[2 * i:2 * i + 2], dt) # subscribe vehicle state from gazebo !!
         
         x, y, yaw, vx, vy, r, delta = state
 
-        w_ss = alpha_vx*(vx - vx_goal)**2 + alpha_r*(r - r_goal)**2
+        w_ss = alpha_vx*(vx - vx_goal)**2 + alpha_r*(r - r_goal)**2 # mpc circular cost function
         cost += w_ss
         
     # Transient Drift Parking
@@ -149,7 +149,7 @@ def mpc_cost(U, *args):
 
 
 # MPC parameters
-N = 3 #10 # 3  # Prediction horizon
+N = 10 #10 # 3  # Prediction horizon
 state = np.array([10.0, 0, np.pi/2, 0, 0, 0, 0])  # Initial state 
 
 # Initial guess for controls

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import scipy.optimize as opt
-
+import time
 # Vehicle parameters 
 # Constants
 dt = 0.02
@@ -22,6 +22,8 @@ mu_spin = 0.55 # spinning coefficient
 circle_radius = 1.5
 v_max = 2.5 # m/s
 steer_max = 0.698 # rad
+
+pre_time = 0
 
 # Initialize plot
 fig, ax = plt.subplots()
@@ -181,7 +183,7 @@ def cost_function(u, x0, N, dt):
     return cost
 
 # MPC setup
-N = 3  # prediction horizon
+N = 10  # prediction horizon
 
 # u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
 # u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
@@ -274,6 +276,11 @@ velocity_texts = [
 ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
 plt.show()
 
+# while (True):
+#     print(time.time() - pre_time)
+#     pre_time = time.time()
+#     update_plot()
+    
 ################################# Plot ####################################################
 # Static plot of the trajectory and heading
 plt.figure(figsize=(10, 8))

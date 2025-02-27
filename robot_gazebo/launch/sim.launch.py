@@ -8,10 +8,21 @@ import os
 import xacro    
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
     
     pkg = get_package_share_directory('robot_gazebo')
+
+    world_file_name = 'sample.world'
+    world = os.path.join(get_package_share_directory(
+        'robot_gazebo'), 'world', world_file_name)
+    
+    declare_world_fname = DeclareLaunchArgument(
+        'world_fname', default_value=world, description='absolute path of gazebo world file')
+    
+    world_fname = LaunchConfiguration('world_fname')
+
     rviz_path = os.path.join(pkg,'rviz','display.rviz')
     rviz = Node(
         package='rviz2',
@@ -43,6 +54,7 @@ def generate_launch_description():
             ]
         ),
         launch_arguments={
+            'world': world_fname,
             'pause': 'true'
         }.items()
     )
@@ -69,12 +81,14 @@ def generate_launch_description():
     robot_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["effort_controllers", "--controller-manager", "/controller_manager"],
+        arguments=["velocity_controllers", "--controller-manager", "/controller_manager"],
+        # arguments=["effort_controllers", "--controller-manager", "/controller_manager"],
     )
 
     launch_description = LaunchDescription()
     launch_description.add_action(rviz)
     launch_description.add_action(f1tenth_robot)
+    launch_description.add_action(declare_world_fname)
     launch_description.add_action(gazebo)
     launch_description.add_action(spawn_entity)
     launch_description.add_action(joint_state_broadcaster_spawner)
