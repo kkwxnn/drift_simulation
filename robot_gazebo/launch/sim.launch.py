@@ -12,7 +12,8 @@ from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
     
-    pkg = get_package_share_directory('robot_gazebo')
+    pkg_description = get_package_share_directory('robot_gazebo')
+    pkg_controller = get_package_share_directory('nmpc_controller')
 
     world_file_name = 'sample.world'
     world = os.path.join(get_package_share_directory(
@@ -23,7 +24,7 @@ def generate_launch_description():
     
     world_fname = LaunchConfiguration('world_fname')
 
-    rviz_path = os.path.join(pkg,'rviz','display.rviz')
+    rviz_path = os.path.join(pkg_description,'rviz','display.rviz')
     rviz = Node(
         package='rviz2',
         executable='rviz2',
@@ -78,12 +79,23 @@ def generate_launch_description():
         arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
     )
 
-    robot_controller_spawner = Node(
+    steering_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["velocity_controllers", "--controller-manager", "/controller_manager"],
-        # arguments=["effort_controllers", "--controller-manager", "/controller_manager"],
+        arguments=["steering_controller", "--controller-manager", "/controller_manager"],
     )
+
+    effort_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["effort_controllers", "--controller-manager", "/controller_manager"],
+    )
+
+    # robot_controller_spawner = Node(
+    #     package="controller_manager",
+    #     executable="spawner",
+    #     arguments=["velocity_controllers", "--controller-manager", "/controller_manager"],
+    # )
 
     launch_description = LaunchDescription()
     launch_description.add_action(rviz)
@@ -92,6 +104,8 @@ def generate_launch_description():
     launch_description.add_action(gazebo)
     launch_description.add_action(spawn_entity)
     launch_description.add_action(joint_state_broadcaster_spawner)
-    launch_description.add_action(robot_controller_spawner)
+    # launch_description.add_action(robot_controller_spawner)
+    launch_description.add_action(steering_controller_spawner)
+    launch_description.add_action(effort_controller_spawner)
     
     return launch_description

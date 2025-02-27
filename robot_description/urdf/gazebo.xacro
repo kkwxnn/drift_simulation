@@ -6,9 +6,10 @@
         <hardware>
             <plugin>gazebo_ros2_control/GazeboSystem</plugin>
         </hardware>
+
+        <!-- Front Wheel (Steering) -->
         <joint name="front_wheel_joint">
-            <!-- <command_interface name="effort"/> -->
-            <command_interface name="velocity"/>
+            <command_interface name="position"/>
             <state_interface name="position">
                 <param name="initial_value">0.0</param>
             </state_interface>
@@ -16,9 +17,10 @@
             <state_interface name="effort"/>
         </joint>
 
+        <!-- Rear Left Wheel -->
         <joint name="rear_left_wheel_joint">
-            <!-- <command_interface name="effort"/> -->
-            <command_interface name="velocity"/>
+            <command_interface name="effort"/>
+            <!-- <command_interface name="velocity"/> -->
             <state_interface name="position">
                 <param name="initial_value">0.0</param>
             </state_interface>
@@ -26,9 +28,10 @@
             <state_interface name="effort"/>
         </joint>
 
+        <!-- Rear right Wheel -->
         <joint name="rear_right_wheel_joint">
-            <!-- <command_interface name="effort"/> -->
-            <command_interface name="velocity"/>
+            <command_interface name="effort"/>
+            <!-- <command_interface name="velocity"/> -->
             <state_interface name="position">
                 <param name="initial_value">0.0</param>
             </state_interface>
