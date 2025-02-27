@@ -91,7 +91,7 @@ def generate_launch_description():
         arguments=["effort_controllers", "--controller-manager", "/controller_manager"],
     )
 
-    # robot_controller_spawner = Node(
+    # velocity_controller_spawner = Node(
     #     package="controller_manager",
     #     executable="spawner",
     #     arguments=["velocity_controllers", "--controller-manager", "/controller_manager"],
@@ -104,8 +104,8 @@ def generate_launch_description():
     launch_description.add_action(gazebo)
     launch_description.add_action(spawn_entity)
     launch_description.add_action(joint_state_broadcaster_spawner)
-    # launch_description.add_action(robot_controller_spawner)
     launch_description.add_action(steering_controller_spawner)
     launch_description.add_action(effort_controller_spawner)
+    # launch_description.add_action(velocity_controller_spawner)
     
     return launch_description
