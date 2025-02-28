@@ -9,6 +9,7 @@ import xacro
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+from launch.actions import ExecuteProcess
 
 def generate_launch_description():
     
@@ -85,11 +86,23 @@ def generate_launch_description():
         arguments=["steering_controller", "--controller-manager", "/controller_manager"],
     )
 
+    joint_group_position_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_group_position_controller", "--controller-manager", "/controller_manager"],
+    )
+
+    activate_joint_group_position_controller = ExecuteProcess(
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 'joint_group_position_controller'], 
+        output='screen'
+    )
+
     effort_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["effort_controllers", "--controller-manager", "/controller_manager"],
     )
+    
 
     # velocity_controller_spawner = Node(
     #     package="controller_manager",
@@ -105,6 +118,8 @@ def generate_launch_description():
     launch_description.add_action(spawn_entity)
     launch_description.add_action(joint_state_broadcaster_spawner)
     launch_description.add_action(steering_controller_spawner)
+    # launch_description.add_action(joint_group_position_controller_spawner)
+    # launch_description.add_action(activate_joint_group_position_controller)
     launch_description.add_action(effort_controller_spawner)
     # launch_description.add_action(velocity_controller_spawner)
     
