@@ -20,7 +20,8 @@ controller_manager:
 steering_controller:
   ros__parameters:
     joints:
-      - front_wheel_joint
+      # - front_wheel_joint
+      - steer_joint
     # command_interfaces:
     #   - position
     # state_interfaces:

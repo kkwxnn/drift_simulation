@@ -10,18 +10,42 @@
       <geometry>
         <box size="0.32 0.16 0.12"/>
       </geometry>
-
     </visual>
     <collision>
       <geometry>
         <box size="0.32 0.16 0.12"/>
       </geometry>
     </collision>
-
     <xacro:inertial_box mass="1.98" x="0.32" y="0.16" z="0.12"> 
       <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
     </xacro:inertial_box>
   </link>
+
+  <!-- Steer Link -->
+  <link name="steer_link">
+    <visual>
+      <geometry>
+        <box size="0.025 0.025 0.031"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.025 0.025 0.031"/>
+      </geometry>
+    </collision>
+    <xacro:inertial_box mass="0.02" x="0.025" y="0.025" z="0.031"> 
+      <origin xyz="0.0 0.0 -0.0155" rpy="0 0 0"/>
+    </xacro:inertial_box>
+  </link>
+
+  <!-- Steer Joint (connects chassis to steer_link) -->
+  <joint name="steer_joint" type="revolute">
+    <parent link="chassis"/>
+    <child link="steer_link"/>
+    <origin xyz="0.16 0.0 -0.06" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/> 
+    <limit lower="-0.698" upper="0.698" effort="10.0" velocity="3.0"/>
+  </joint>
 
   <!-- Front Wheel -->
   <link name="front_wheel">
@@ -31,26 +55,23 @@
         <cylinder radius="0.031" length="0.025"/>
       </geometry>
     </visual>
-
     <collision>
       <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
       <geometry>
         <cylinder radius="0.031" length="0.025"/>
       </geometry>
     </collision>
-
     <xacro:inertial_cylinder mass="0.02" length="0.025" radius="0.031"> 
       <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
     </xacro:inertial_cylinder>
   </link>
 
-  <!-- Front Wheel Joint -->
-  <joint name="front_wheel_joint" type="revolute">
-    <parent link="chassis"/>
+  <!-- Front Wheel Joint (connects steer_link to front_wheel) -->
+  <joint name="front_wheel_joint" type="continuous">
+    <parent link="steer_link"/>
     <child link="front_wheel"/>
-    <origin xyz="0.16 0.0 -0.06" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/> 
-    <limit lower="-0.698" upper="0.698" effort="10.0" velocity="3.0"/>
+    <origin xyz="0 0 0.0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/> 
   </joint>
 
   <!-- Rear Left Wheel -->
@@ -61,20 +82,18 @@
         <cylinder radius="0.031" length="0.025"/>
       </geometry>
     </visual>
-
     <collision>
       <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
       <geometry>
         <cylinder radius="0.031" length="0.025"/>
       </geometry>
     </collision>
-
     <xacro:inertial_cylinder mass="0.02" length="0.025" radius="0.031"> 
       <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
     </xacro:inertial_cylinder>
   </link>
 
-   <!-- Rear Left Wheel Joint -->
+  <!-- Rear Left Wheel Joint -->
   <joint name="rear_left_wheel_joint" type="continuous">
     <parent link="chassis"/>
     <child link="rear_left_wheel"/>
@@ -91,14 +110,12 @@
         <cylinder radius="0.031" length="0.025"/>
       </geometry>
     </visual>
-
     <collision>
       <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
       <geometry>
         <cylinder radius="0.031" length="0.025"/>
       </geometry>
     </collision>
-
     <xacro:inertial_cylinder mass="0.02" length="0.025" radius="0.031"> 
       <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
     </xacro:inertial_cylinder>
