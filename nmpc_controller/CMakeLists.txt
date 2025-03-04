@@ -30,6 +30,7 @@ install(PROGRAMS
   scripts/dummy_script.py
   scripts/fuse_nmpc.py
   scripts/loco_joy.py
+  scripts/nmpc_controller.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
