@@ -3,8 +3,8 @@
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Pose, Twist
-from nav_msgs.msg import Odometry
+from std_msgs.msg import Float64MultiArray
+from gazebo_msgs.msg import ModelStates
 from scipy.optimize import minimize
 
 # Constants
@@ -29,17 +29,22 @@ class DriftController(Node):
     def __init__(self):
         super().__init__('drift_controller')
         
-        # Subscribe to vehicle pose
-        self.pose_subscription = self.create_subscription(
-            Odometry,
-            '/vehicle/pose',  # Update with the correct topic name
-            self.pose_callback,
+        # Subscribe to Gazebo model states
+        self.model_states_subscription = self.create_subscription(
+            ModelStates,
+            '/gazebo/model_states',
+            self.model_states_callback,
             10)
         
-        # Publisher for control commands
-        self.control_publisher = self.create_publisher(
-            Twist,
-            '/vehicle/cmd_vel',  # Update with the correct topic name
+        # Publishers for control commands
+        self.effort_publisher = self.create_publisher(
+            Float64MultiArray,
+            '/effort_controllers/commands',
+            10)
+        
+        self.steering_publisher = self.create_publisher(
+            Float64MultiArray,
+            '/steering_controller/commands',
             10)
         
         # Initial state
@@ -48,15 +53,31 @@ class DriftController(Node):
         self.time = [0]
         self.targets = []
 
-    def pose_callback(self, msg):
-        # Extract pose information from the message
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
-        yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
-        vx = msg.twist.twist.linear.x
-        vy = msg.twist.twist.linear.y
-        r = msg.twist.twist.angular.z
-        
+        # Vehicle model name 
+        self.vehicle_name = 'f1tenth'  
+
+    def model_states_callback(self, msg):
+        # Find the index of the vehicle in the model states
+        try:
+            vehicle_index = msg.name.index(self.vehicle_name)
+        except ValueError:
+            self.get_logger().warn(f"Vehicle '{self.vehicle_name}' not found in model states.")
+            return
+
+        # Extract pose and twist information for the vehicle
+        pose = msg.pose[vehicle_index]
+        twist = msg.twist[vehicle_index]
+
+        # Extract position and orientation
+        x = pose.position.x
+        y = pose.position.y
+        yaw = self.quaternion_to_yaw(pose.orientation)
+
+        # Extract linear and angular velocities
+        vx = twist.linear.x
+        vy = twist.linear.y
+        r = twist.angular.z
+
         # Update state
         self.state = np.array([x, y, yaw, vx, vy, r, 0])
         
@@ -97,17 +118,22 @@ class DriftController(Node):
         self.controls.append(control)
         self.time.append((t + 1) * dt)
 
-        # Publish control command
+        # Publish control commands
         self.publish_control(control)
 
     def publish_control(self, control):
-        # Create Twist message
-        twist_msg = Twist()
-        twist_msg.linear.x = control[0]
-        twist_msg.angular.z = control[1]
-        
-        # Publish the message
-        self.control_publisher.publish(twist_msg)
+        # Extract control values
+        Fx, Delta_delta = control
+
+        # Publish effort commands (torque for rear wheels)
+        effort_msg = Float64MultiArray()
+        effort_msg.data = [Fx, Fx]  # Same torque for both rear wheels
+        self.effort_publisher.publish(effort_msg)
+
+        # Publish steering command (steering angle)
+        steering_msg = Float64MultiArray()
+        steering_msg.data = [Delta_delta]  # Steering angle for the front wheel
+        self.steering_publisher.publish(steering_msg)
 
     def circle_target(self, t, radius, center):
         angle = t * 0.1  # Angular velocity (radians per second)
