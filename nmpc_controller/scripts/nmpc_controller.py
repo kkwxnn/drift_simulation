@@ -22,7 +22,7 @@ v_blend_max = 2.5
 # Define parameters
 dt = 0.1  # time step
 
-circle_radius = 10.0  # Radius of the circle
+circle_radius = 2.0  # Radius of the circle
 circle_center = np.array([0, 0])  # Center of the circle
 
 class DriftController(Node):
@@ -48,7 +48,7 @@ class DriftController(Node):
             10)
         
         # Initial state
-        self.state = np.array([10.0, 0, np.pi/2, 0, 0, 0, 0])
+        self.state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0, 0])
         self.controls = []
         self.time = [0]
         self.targets = []
