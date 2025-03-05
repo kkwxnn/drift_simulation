@@ -78,8 +78,13 @@ class DriftController(Node):
         vy = twist.linear.y
         r = twist.angular.z
 
+        # Estimate the steering angle (delta)
+        # Assuming a simple bicycle model: delta = arctan((Lr + Lf) * r / vx)
+        epsilon = 1e-5  # To avoid division by zero
+        delta = np.arctan2((Lr + Lf) * r, vx + epsilon)
+
         # Update state
-        self.state = np.array([x, y, yaw, vx, vy, r, 0])
+        self.state = np.array([x, y, yaw, vx, vy, r, delta])
         
         # Run MPC
         self.run_mpc()
@@ -238,6 +243,7 @@ class DriftController(Node):
         heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
 
         J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
+
         return cost
 
 def main(args=None):
