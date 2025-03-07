@@ -145,6 +145,7 @@ def mpc_cost(U, *args):
     J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
     # cost += J_park
 
+    print(cost)
     return cost
 
 

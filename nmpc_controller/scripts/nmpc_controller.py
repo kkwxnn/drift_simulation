@@ -6,6 +6,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from gazebo_msgs.msg import ModelStates
 from scipy.optimize import minimize
+import tf_transformations
 
 # Constants
 m = 2.35  # Mass of the vehicle (kg)
@@ -22,7 +23,7 @@ v_blend_max = 2.5
 # Define parameters
 dt = 0.1  # time step
 
-circle_radius = 2.0  # Radius of the circle
+circle_radius = 2.0 # 10.0  # Radius of the circle
 circle_center = np.array([0, 0])  # Center of the circle
 
 class DriftController(Node):
@@ -48,7 +49,8 @@ class DriftController(Node):
             10)
         
         # Initial state
-        self.state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0, 0])
+        # self.state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0, 0])
+        self.state = np.array([0, 0, np.pi/2, 0, 0, 0, 0])
         self.controls = []
         self.time = [0]
         self.targets = []
@@ -86,6 +88,9 @@ class DriftController(Node):
         # Update state
         self.state = np.array([x, y, yaw, vx, vy, r, delta])
         
+        # self.get_logger().info(f"State: x={x}, y={y}, yaw={yaw}, vx={vx}, vy={vy}, r={r}, delta={delta}")
+        print(yaw)
+
         # Run MPC
         self.run_mpc()
 
@@ -95,7 +100,8 @@ class DriftController(Node):
         y = orientation.y
         z = orientation.z
         w = orientation.w
-        yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y**2 + z**2))
+        # yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y**2 + z**2))
+        roll, pitch, yaw = tf_transformations.euler_from_quaternion([x, y, z, w])
         return yaw
 
     def run_mpc(self):
@@ -123,6 +129,8 @@ class DriftController(Node):
         self.controls.append(control)
         self.time.append((t + 1) * dt)
 
+        self.get_logger().info(f"Control: Fx={control[0]}, Delta_delta={control[1]}")
+        
         # Publish control commands
         self.publish_control(control)
 
@@ -130,9 +138,10 @@ class DriftController(Node):
         # Extract control values
         Fx, Delta_delta = control
 
+        r = 0.031
         # Publish effort commands (torque for rear wheels)
         effort_msg = Float64MultiArray()
-        effort_msg.data = [Fx, Fx]  # Same torque for both rear wheels
+        effort_msg.data = [Fx/r, Fx/r]  # Same torque for both rear wheels
         self.effort_publisher.publish(effort_msg)
 
         # Publish steering command (steering angle)
@@ -243,6 +252,8 @@ class DriftController(Node):
         heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
 
         J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
+
+        # print(cost)
 
         return cost
 
