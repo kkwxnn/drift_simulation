@@ -138,10 +138,10 @@ class DriftController(Node):
         # Extract control values
         Fx, Delta_delta = control
 
-        r = 0.031
+        r = 0.031 # wheel radius
         # Publish effort commands (torque for rear wheels)
         effort_msg = Float64MultiArray()
-        effort_msg.data = [Fx/r, Fx/r]  # Same torque for both rear wheels
+        effort_msg.data = [Fx*r, Fx*r]  # Same torque for both rear wheels
         self.effort_publisher.publish(effort_msg)
 
         # Publish steering command (steering angle)
