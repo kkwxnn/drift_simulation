@@ -49,14 +49,31 @@ class DriftController(Node):
             10)
         
         # Initial state
-        # self.state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0, 0])
         self.state = np.array([0, 0, np.pi/2, 0, 0, 0, 0])
+        self.current_delta = 0.0
         self.controls = []
         self.time = [0]
         self.targets = []
 
         # Vehicle model name 
         self.vehicle_name = 'f1tenth'  
+
+    def normalize_angle(self, angle):
+        """Normalize angle to [-π, π]."""
+        while angle > np.pi:
+            angle -= 2 * np.pi
+        while angle < -np.pi:
+            angle += 2 * np.pi
+        return angle
+
+    def quaternion_to_yaw(self, orientation):
+        # Convert quaternion to yaw angle
+        x = orientation.x
+        y = orientation.y
+        z = orientation.z
+        w = orientation.w
+        roll, pitch, yaw = tf_transformations.euler_from_quaternion([x, y, z, w])
+        return self.normalize_angle(yaw)
 
     def model_states_callback(self, msg):
         # Find the index of the vehicle in the model states
@@ -81,28 +98,21 @@ class DriftController(Node):
         r = twist.angular.z
 
         # Estimate the steering angle (delta)
-        # Assuming a simple bicycle model: delta = arctan((Lr + Lf) * r / vx)
         epsilon = 1e-5  # To avoid division by zero
-        delta = np.arctan2((Lr + Lf) * r, vx + epsilon)
+        # delta = np.arctan2((Lr + Lf) * r, vx + epsilon) - np.arctan2(vy, vx + epsilon)
+        delta = self.current_delta
 
         # Update state
         self.state = np.array([x, y, yaw, vx, vy, r, delta])
-        
-        # self.get_logger().info(f"State: x={x}, y={y}, yaw={yaw}, vx={vx}, vy={vy}, r={r}, delta={delta}")
-        print(yaw)
+
+        # # Log key variables
+        # self.get_logger().info(f"Yaw: {yaw}, Yaw Target: {self.targets[-1][2] if self.targets else 'N/A'}")
+        # self.get_logger().info(f"Delta: {delta}")
+        # alpha_f, alpha_r = self.calculate_slip_angles(vx, vy, r, delta)
+        # self.get_logger().info(f"Alpha_f: {alpha_f}, Alpha_r: {alpha_r}")
 
         # Run MPC
         self.run_mpc()
-
-    def quaternion_to_yaw(self, orientation):
-        # Convert quaternion to yaw angle
-        x = orientation.x
-        y = orientation.y
-        z = orientation.z
-        w = orientation.w
-        # yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y**2 + z**2))
-        roll, pitch, yaw = tf_transformations.euler_from_quaternion([x, y, z, w])
-        return yaw
 
     def run_mpc(self):
         N = 10  # Prediction horizon
@@ -138,17 +148,23 @@ class DriftController(Node):
         # Extract control values
         Fx, Delta_delta = control
 
-        r = 0.031 # wheel radius
+        # Normalize the steering angle
+        Delta_delta_normalized = self.normalize_angle(Delta_delta)
+
+        # Store the current delta value (normalized)
+        self.current_delta = Delta_delta_normalized
+
+        r = 0.031  # wheel radius
         # Publish effort commands (torque for rear wheels)
         effort_msg = Float64MultiArray()
-        effort_msg.data = [Fx*r, Fx*r]  # Same torque for both rear wheels
+        effort_msg.data = [Fx * r, Fx * r]  # Same torque for both rear wheels
         self.effort_publisher.publish(effort_msg)
 
-        # Publish steering command (steering angle)
+        # Publish steering command (normalized steering angle)
         steering_msg = Float64MultiArray()
-        steering_msg.data = [Delta_delta]  # Steering angle for the front wheel
+        steering_msg.data = [Delta_delta_normalized]  # Normalized steering angle for the front wheel
         self.steering_publisher.publish(steering_msg)
-
+        
     def circle_target(self, t, radius, center):
         angle = t * 0.1  # Angular velocity (radians per second)
         x = center[0] + radius * np.cos(angle)
