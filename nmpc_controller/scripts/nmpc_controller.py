@@ -100,7 +100,7 @@ class DriftController(Node):
         # Estimate the steering angle (delta)
         epsilon = 1e-5  # To avoid division by zero
         # delta = np.arctan2((Lr + Lf) * r, vx + epsilon) - np.arctan2(vy, vx + epsilon)
-        delta = self.current_delta
+        delta = self.normalize_angle(self.current_delta)
 
         # Update state
         self.state = np.array([x, y, yaw, vx, vy, r, delta])
@@ -164,7 +164,7 @@ class DriftController(Node):
         steering_msg = Float64MultiArray()
         steering_msg.data = [Delta_delta_normalized]  # Normalized steering angle for the front wheel
         self.steering_publisher.publish(steering_msg)
-        
+
     def circle_target(self, t, radius, center):
         angle = t * 0.1  # Angular velocity (radians per second)
         x = center[0] + radius * np.cos(angle)
