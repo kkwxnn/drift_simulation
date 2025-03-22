@@ -31,6 +31,7 @@ install(PROGRAMS
   scripts/fuse_nmpc.py
   scripts/loco_joy.py
   scripts/nmpc_controller.py
+  scripts/plot_debug_data.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

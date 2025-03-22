@@ -8,6 +8,7 @@ from gazebo_msgs.msg import ModelStates
 from scipy.optimize import minimize
 import tf_transformations
 
+
 # Constants
 m = 2.35  # Mass of the vehicle (kg)
 Iz = 0.045  # Moment of inertia around z-axis (kg*m^2)
@@ -30,6 +31,9 @@ class DriftController(Node):
     def __init__(self):
         super().__init__('drift_controller')
         
+        self.cost_data = []
+        self.debug_pub = self.create_publisher(Float64MultiArray, '/debug_data', 10)
+
         # Subscribe to Gazebo model states
         self.model_states_subscription = self.create_subscription(
             ModelStates,
@@ -113,6 +117,22 @@ class DriftController(Node):
 
         # Run MPC
         self.run_mpc()
+
+        # Publish debug data
+        debug_msg = Float64MultiArray()
+        debug_msg.data = [
+            x,  # X position
+            y,  # Y position
+            yaw,  # Yaw (heading)
+            delta,  # Steering angle
+            r,  # Yaw rate
+            vx,  # Longitudinal velocity
+            vy,  # Lateral velocity
+            self.controls[-1][0],  # Fx
+            self.controls[-1][1],  # Delta_delta
+            self.cost_data[-1] if self.cost_data else 0.0  # MPC cost (handle empty list)
+        ]
+        self.debug_pub.publish(debug_msg)
 
     def run_mpc(self):
         N = 10  # Prediction horizon
@@ -269,6 +289,7 @@ class DriftController(Node):
 
         J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
 
+        self.cost_data.append(cost)
         # print(cost)
 
         return cost
