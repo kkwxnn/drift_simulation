@@ -145,12 +145,12 @@ def mpc_cost(U, *args):
     J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
     # cost += J_park
 
-    print(cost)
+    # print(cost)
     return cost
 
 
 # MPC parameters
-N = 10 #10 # 3  # Prediction horizon
+N = 3 #10 # 3  # Prediction horizon
 state = np.array([10.0, 0, np.pi/2, 0, 0, 0, 0])  # Initial state 
 
 # Initial guess for controls

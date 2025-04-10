@@ -1,8 +1,11 @@
+#################### offline mpc #####################
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import scipy.optimize as opt
 import time
+
 # Vehicle parameters 
 # Constants
 dt = 0.02
@@ -19,68 +22,43 @@ Iz = 0.045
 mu = 1.31 # mu_peak
 mu_spin = 0.55 # spinning coefficient
 
-circle_radius = 1.5
+circle_radius = 5.0
 v_max = 2.5 # m/s
 steer_max = 0.698 # rad
 
-pre_time = 0
-
-# Initialize plot
-fig, ax = plt.subplots()
-ax.axis([-2.5, 2.5, -2.5, 2.5])
-ax.set_aspect('equal')
-line, = ax.plot([], [], 'b-')
-traj_cog, = ax.plot([], [], 'g-')
-traj_r, = ax.plot([], [], 'r-')
-
-# Geometry
-P = np.array([[-0.15, -0.15, 0.15, 0.15, -0.15],
-              [-0.08, 0.08, 0.08, -0.08, -0.08],
-              [1, 1, 1, 1, 1]])
-W = np.array([[-0.03, -0.03, 0.03, 0.03, -0.03],
-              [-0.015, 0.015, 0.015, -0.015, -0.015],
-              [1, 1, 1, 1, 1]])
-CoG = np.array([[0], [0], [1]])
-r_axle = np.array([[-0.15], [0], [1]])
-
 # Initialize state (x, y, theta, Ux, Uy, r)
-x = [0.0, 0.0, np.pi/2, 0.0, 0.0, 0.0]
+x = np.array([0.0, 0.0, np.pi/2, 0.0, 0.0, 0.0])
 
 def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
 def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_y, alpha):
     # Longitudinal wheel slip
-    if abs(Ux_cmd - Ux) < 1e-6:  # Ux_cmd approximately equal to Ux
+    if abs(Ux_cmd - Ux) < 1e-6:
         K = 0
-    elif abs(Ux) < 1e-6:  # Handle Ux = 0
+    elif abs(Ux) < 1e-6:
         Fx = np.sign(Ux_cmd) * mu * Fz
         Fy = 0
         return Fx, Fy
     else:
         K = (Ux_cmd - Ux) / abs(Ux)
 
-    # Handle K < 0 case
     reverse = 1
     if K < 0:
         reverse = -1
         K = abs(K)
 
-    # Alpha > pi/2 adaptation
     if abs(alpha) > np.pi / 2:
         alpha = (np.pi - abs(alpha)) * np.sign(alpha)
 
-    # Calculate gamma with safeguard for K = -1
     gamma = np.sqrt(C_x**2 * (K / max(1 + K, 1e-6))**2 + C_y**2 * (np.tan(alpha) / max(1 + K, 1e-6))**2)
 
-    # Friction model for gamma <= 3 * mu * Fz
     if gamma <= 3 * mu * Fz:
         F = gamma - (2 - mu_slide / mu) * gamma**2 / (3 * mu * Fz) + \
             (1 - (2 / 3) * (mu_slide / mu)) * gamma**3 / (9 * mu**2 * Fz**2)
     else:
         F = mu_slide * Fz
 
-    # Compute forces with safeguard for gamma = 0
     if gamma == 0:
         Fx = Fy = 0
     else:
@@ -89,33 +67,28 @@ def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_y, alpha):
 
     return Fx, Fy
 
-
 def dynamics(x, u):
     pos_x, pos_y, pos_phi = x[:3]
     Ux, Uy, r = x[3:]
     Ux_cmd, delta = u
 
-    # Tire Dyanmics
-    # lateral slip angle alpha
-    if Ux == 0 and Uy == 0: # vehicle is still no slip
+    if Ux == 0 and Uy == 0:
         alpha_F = alpha_R = 0
-    elif Ux == 0: # perfect side slip
+    elif Ux == 0:
         alpha_F = np.pi / 2 * np.sign(Uy) - delta
         alpha_R = np.pi / 2 * np.sign(Uy)
-    elif Ux < 0: # rare ken block situations
+    elif Ux < 0:
         alpha_F = np.arctan((Uy + a * r) / abs(Ux)) + delta
         alpha_R = np.arctan((Uy - b * r) / abs(Ux))
-    else: # normal situation
+    else:
         alpha_F = np.arctan((Uy + a * r) / abs(Ux)) - delta
         alpha_R = np.arctan((Uy - b * r) / abs(Ux))
 
-    # safety that keep alpha in valid range
     alpha_F, alpha_R = wrap_to_pi(alpha_F), wrap_to_pi(alpha_R)
 
     Fxf, Fyf = tire_dyn(Ux, Ux, mu, mu_spin, G_front, C_x, C_y, alpha_F)
     Fxr, Fyr = tire_dyn(Ux, Ux_cmd, mu, mu_spin, G_rear, C_x, C_y, alpha_R)
 
-    # Vehicle Dynamics
     r_dot = (a * Fyf * np.cos(delta) - b * Fyr) / Iz
     Ux_dot = (Fxr - Fyf * np.sin(delta)) / m + r * Uy
     Uy_dot = (Fyf * np.cos(delta) + Fyr) / m - r * Ux
@@ -143,174 +116,218 @@ def dynamics_finite(x, u, dt):
 
 def circle_velocity_target(circle_radius, v):
     vx_goal = v
-    r_goal = vx_goal / circle_radius  # Yaw rate for circular motion
+    r_goal = vx_goal / circle_radius
     return vx_goal, r_goal
 
-# Define the cost function for MPC
 def cost_function(u, x0, N, dt):
-    # x0: initial state
-    # N: prediction horizon
-    # u: control inputs over the horizon (throttle, steering)
     vx = x0[3]
-
     if vx >= 0:
         v = v_max
-    elif vx < 0:
+    else:
         v = -v_max
     
     vx_goal, r_goal = circle_velocity_target(circle_radius, v)
     
-    # Weighting factors for the velocity and yaw rate errors
+    # Calculate desired position based on current state
+    theta_desired = np.arctan2(x0[1], x0[0]) + r_goal * dt * np.arange(1, N+1)
+    x_desired = circle_radius * np.cos(theta_desired)
+    y_desired = circle_radius * np.sin(theta_desired)
+    
+    # Weighting factors
     alpha_vx = 1.0
     alpha_r = 1.0
-
+    alpha_pos = 10.0  # New weight for position error
+    
     cost = 0
     state = np.copy(x0)
     
-    # Predict the states and calculate the cost
     for i in range(N):
-       
         throttle, steer = u[2*i], u[2*i+1]
-        
         state = dynamics_finite(state, np.array([throttle, steer]), dt)
-        
         x, y, yaw, vx, vy, r = state
         
-        # cost += np.sum(state[:3]**2) + np.sum(u[2*i:2*i+2]**2)
-        cost += alpha_vx * (vx - vx_goal)**2 + alpha_r * (r - r_goal)**2 # w_ss
-        # print(f"Control inputs: {u}, Cost: {cost}")
-
+        # Include position error in cost
+        pos_error = (x - x_desired[i])**2 + (y - y_desired[i])**2
+        cost += (alpha_vx * (vx - vx_goal)**2 + 
+                alpha_r * (r - r_goal)**2 + 
+                alpha_pos * pos_error)
     return cost
 
 # MPC setup
-N = 10  # prediction horizon
-
-# u_initial = np.random.uniform(-2.0, 2.0, 2 * N)  # Randomize within bounds
-# u_initial = [-0.70733845,  0.05867338, -2.1500941,   0.16801063,  0.06384393, -0.58938019] # Backward
-# u_initial = [0.84183408,  0.45151292,  0.7560102,   0.35675445, -2.09682026,  0.33119607] # Forward
-# u_initial = [0, 0, 0, 0, 0, 0]
-
+N = 3 # prediction horizon
 throttle_bound = (-v_max, v_max)  
 steer_bound = (-steer_max, steer_max)
 
+# Initialize control sequence
 throttle_initial = np.random.uniform(throttle_bound[0], throttle_bound[1], N)
 steer_initial = np.random.uniform(steer_bound[0], steer_bound[1], N)
-
-u_initial = np.zeros(2 * N) 
-u_initial[::2] = throttle_initial 
-u_initial[1::2] = steer_initial   
-
-print(u_initial) 
-
+u_initial = np.zeros(2 * N)
+u_initial[::2] = throttle_initial
+u_initial[1::2] = steer_initial
 
 def mpc_control(x0):
-    
-    throttle_bound = (-v_max, v_max)  
-    steer_bound = (-steer_max, steer_max)  
-    
     bounds = [throttle_bound, steer_bound] * N
-    
     result = opt.minimize(cost_function, u_initial, args=(x0, N, dt), method='SLSQP', bounds=bounds)
-    # print(f"Optimized control inputs: {result.x}")
-
     if not result.success:
         print("Optimization failed:", result.message)
+    return result.x[:2]
 
-    return result.x[:2]  # Return first control input pair (throttle, steer)
+# ==============================================
+# ==============================================
+# Offline Optimization Phase
+# ==============================================
+print("Running offline optimization...")
+start_time = time.time()
 
-# Define the trajectories as lists to store the data points
-traj_cog_x = []
-traj_cog_y = []
-traj_r_x = []
-traj_r_y = []
+# Storage for results
+states = [x.copy()]
+controls = []
+targets = []
 
-# Heading arrow initialization
-heading_arrow = ax.quiver(0, 0, 0, 0, angles="xy", scale_units="xy", scale=3, color="black", label="Heading")
+# Calculate time to complete one full circle
+circumference = 2 * np.pi * circle_radius
+time_per_circle = circumference / v_max
 
-# Legend for trajectories
-ax.legend([traj_cog, traj_r], ["CoG Trajectory (Green)", "Rear Trajectory (Red)"], loc="upper right")
-
-def update_plot(frame):
-    global x
-    u = mpc_control(x)  # Get control inputs from MPC
-    x = dynamics_finite(x, u, dt)  # Apply the dynamics model
-
-    pos_x, pos_y, pos_phi = x[:3]
-    v_x, v_y = x[3], x[4]  # Assuming v_x and v_y are at index 3 and 4 of the state vector
-
-    A = np.array([[np.cos(pos_phi), -np.sin(pos_phi), pos_x],
-                  [np.sin(pos_phi), np.cos(pos_phi), pos_y],
-                  [0, 0, 1]])
-    pos = A @ P
-    CoG_n = A @ CoG
-    rear_n = A @ r_axle
-
-    # Update the plot
-    line.set_data(pos[0, :], pos[1, :])
-
-    # Append new points to the trajectory lists
-    traj_cog_x.append(CoG_n[0, 0])
-    traj_cog_y.append(CoG_n[1, 0])
-    traj_r_x.append(rear_n[0, 0])
-    traj_r_y.append(rear_n[1, 0])
-
-    # Set the data for the trajectory plots
-    traj_cog.set_data(traj_cog_x, traj_cog_y)
-    traj_r.set_data(traj_r_x, traj_r_y)
-
-    # Update the heading arrow
-    heading_arrow.set_offsets([pos_x, pos_y])
-    heading_arrow.set_UVC(np.cos(pos_phi), np.sin(pos_phi))
-
-    # Update the static velocity annotations (in top-left corner)
-    velocity_texts[0].set_text(f"v_x: {v_x:.2f}")
-    velocity_texts[1].set_text(f"v_y: {v_y:.2f}")
-
-# Initialize a list to store the velocity text annotations
-velocity_texts = [
-    ax.text(0.05, 0.95, "v_x: 0.00", transform=ax.transAxes, color="black", fontsize=10),
-    ax.text(0.05, 0.90, "v_y: 0.00", transform=ax.transAxes, color="black", fontsize=10)
-]
-
-# Start the animation
-ani = FuncAnimation(fig, update_plot, frames=500, interval=dt * 1000)
-plt.show()
-
-# while (True):
-#     print(time.time() - pre_time)
-#     pre_time = time.time()
-#     update_plot()
+for t in range(1000):  # Simulate 500 steps
+    # Calculate angle based on time and desired velocity
+    theta = (2 * np.pi * t * dt) / time_per_circle
+    target = np.array([circle_radius * np.cos(theta), circle_radius * np.sin(theta)])
+    targets.append(target)
     
-################################# Plot ####################################################
-# Static plot of the trajectory and heading
+    # Get control from MPC
+    u = mpc_control(x)
+    controls.append(u)
+    
+    # Apply dynamics
+    x = dynamics_finite(x, u, dt)
+    states.append(x.copy())
+
+print(f"Optimization completed in {time.time() - start_time:.2f} seconds")
+
+# Convert to arrays
+states = np.array(states)
+controls = np.array(controls)
+targets = np.array(targets)
+
+# ==============================================
+# Visualization Phase
+# ==============================================
+print("Preparing visualization...")
+
+# First, create a static plot of the trajectory
 plt.figure(figsize=(10, 8))
+plt.plot(states[:, 0], states[:, 1], 'b-', label='Robot Trajectory', linewidth=2)
+plt.plot(targets[:, 0], targets[:, 1], 'g--', label='Target Circle', linewidth=1.5)
 
-# Plot the trajectories
-plt.plot(traj_cog_x, traj_cog_y, label="CoG Trajectory (Green)", color="green", linewidth=2)
-plt.plot(traj_r_x, traj_r_y, label="Rear Trajectory (Red)", color="red", linewidth=2)
+# Plot yaw direction arrows every 20 steps
+for i in range(0, len(states), 20):
+    x, y, yaw = states[i, 0], states[i, 1], states[i, 2]
+    yaw_dx = 0.5 * np.cos(yaw)
+    yaw_dy = 0.5 * np.sin(yaw)
+    plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
 
-# Add the heading arrows
-for i in range(0, len(traj_cog_x), 10):  # Plot every 10th point for clarity
-    x, y = traj_cog_x[i], traj_cog_y[i]
-    yaw = wrap_to_pi(np.arctan2(traj_cog_y[i] - traj_r_y[i], traj_cog_x[i] - traj_r_x[i]))  # Corrected yaw direction
-    dx = 0.3 * np.cos(yaw)  # Scale arrows
-    dy = 0.3 * np.sin(yaw)
-    plt.arrow(x, y, dx, dy, head_width=0.1, head_length=0.15, fc="black", ec="black")
-
-# Add circle for the target trajectory
-theta = np.linspace(0, 2 * np.pi, 100)
-circle_x = circle_radius * np.cos(theta)
-circle_y = circle_radius * np.sin(theta)
-plt.plot(circle_x, circle_y, '--', label='Target Circle', color="blue", linewidth=1.5)
-
-# Plot settings
-plt.xlabel("X Position (m)")
-plt.ylabel("Y Position (m)")
-plt.title("Vehicle Trajectory and Heading Visualization")
-plt.axis("equal")
+plt.xlabel('X position (m)')
+plt.ylabel('Y position (m)')
 plt.legend()
+plt.title('MPC - Circular Trajectory with Yaw Visualization')
 plt.grid()
-
-# Save the plot as an image
-plt.savefig("trajectory_and_heading.png", dpi=300)
+plt.axis('equal')
+plt.savefig("mpc_trajectory_plot.png")
 plt.show()
+
+# Now create the animation
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(-3, 3)
+ax.set_ylim(-3, 3)
+ax.set_aspect('equal')
+ax.grid(True)
+ax.set_title("MPC Circular Trajectory Tracking")
+ax.set_xlabel("X Position (m)")
+ax.set_ylabel("Y Position (m)")
+
+# Initialize plot elements
+trajectory_line, = ax.plot([], [], 'b-', lw=2, label='Robot Trajectory')
+target_circle, = ax.plot([], [], 'g--', lw=1.5, label='Target Circle')
+car_marker, = ax.plot([], [], 'ro', markersize=8, label='Car Position')
+yaw_arrow = ax.arrow(0, 0, 0, 0, head_width=0.2, head_length=0.3, fc='r', ec='r')
+
+# Add text elements for vehicle state
+vx_text = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+vy_text = ax.text(0.02, 0.90, '', transform=ax.transAxes)
+yaw_text = ax.text(0.02, 0.85, '', transform=ax.transAxes)
+r_text = ax.text(0.02, 0.80, '', transform=ax.transAxes)
+control_text = ax.text(0.02, 0.75, '', transform=ax.transAxes)
+
+# Add legend
+ax.legend(loc='upper right')
+
+def init():
+    trajectory_line.set_data([], [])
+    target_circle.set_data([], [])
+    car_marker.set_data([], [])
+    yaw_arrow.set_data(x=0, y=0, dx=0, dy=0)
+    vx_text.set_text('')
+    vy_text.set_text('')
+    yaw_text.set_text('')
+    r_text.set_text('')
+    control_text.set_text('')
+    return trajectory_line, target_circle, car_marker, yaw_arrow, vx_text, vy_text, yaw_text, r_text, control_text
+
+def update(frame):
+    # Update trajectory (up to current frame)
+    trajectory_line.set_data(states[:frame, 0], states[:frame, 1])
+    
+    # Update target circle (full circle)
+    theta = np.linspace(0, 2*np.pi, 100)
+    target_x = circle_radius * np.cos(theta)
+    target_y = circle_radius * np.sin(theta)
+    target_circle.set_data(target_x, target_y)
+    
+    # Update car position
+    x, y = states[frame, 0], states[frame, 1]
+    car_marker.set_data([x], [y])
+    
+    # Update yaw arrow
+    yaw = states[frame, 2]
+    yaw_dx = 0.5 * np.cos(yaw)
+    yaw_dy = 0.5 * np.sin(yaw)
+    
+    # Remove old arrow and create new one
+    global yaw_arrow
+    yaw_arrow.remove()
+    yaw_arrow = ax.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
+    
+    # Update text displays
+    vx = states[frame, 3]
+    vy = states[frame, 4]
+    r = states[frame, 5]
+    throttle, steer = controls[frame, 0], controls[frame, 1]
+    
+    vx_text.set_text(f'vx: {vx:.2f} m/s')
+    vy_text.set_text(f'vy: {vy:.2f} m/s')
+    yaw_text.set_text(f'yaw: {np.degrees(yaw):.1f}°')
+    r_text.set_text(f'r: {r:.2f} rad/s')
+    control_text.set_text(f'Throttle: {throttle:.2f}\nSteer: {np.degrees(steer):.1f}°')
+    
+    # Adjust view if needed
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    buffer = 1.0
+    
+    if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
+        ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
+        ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
+    
+    return trajectory_line, target_circle, car_marker, yaw_arrow, vx_text, vy_text, yaw_text, r_text, control_text
+
+# Create animation
+ani = FuncAnimation(
+    fig, update, frames=len(states),
+    init_func=init, blit=False, interval=50
+)
+
+plt.tight_layout()
+plt.show()
+
+# Save animation (optional)
+# ani.save('mpc_trajectory.mp4', writer='ffmpeg', fps=30)
