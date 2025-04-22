@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
+import matplotlib.animation as animation
 
 # Vehicle parameters 
 dt = 0.02
@@ -18,7 +19,7 @@ mu = 1.31  # mu_peak
 mu_spin = 0.55  # spinning coefficient
 
 # Circle trajectory parameters
-circle_radius = 10.0
+circle_radius = 1.5
 circle_center = np.array([0, 0])
 v_max = 2.5  # m/s
 steer_max = 0.698  # rad
@@ -61,29 +62,36 @@ def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_y, alpha):
 
     return Fx, Fy
 
+def calculate_slip_angles(vx, vy, r, delta):
+    if vx == 0 and vy == 0:
+        alpha_F = alpha_R = 0
+    elif vx == 0:
+        alpha_F = np.pi / 2 * np.sign(vy) - delta
+        alpha_R = np.pi / 2 * np.sign(vy)
+    elif vx < 0:
+        alpha_F = np.arctan((vy + a * r) / abs(vx)) + delta
+        alpha_R = np.arctan((vy - b * r) / abs(vx))
+    else:
+        alpha_F = np.arctan((vy + a * r) / abs(vx)) - delta
+        alpha_R = np.arctan((vy - b * r) / abs(vx))
+    return alpha_F, alpha_R
+
+def calculate_tire_forces(alpha_f, alpha_r):
+    Fxf, Fyf = tire_dyn(0, 0, mu, mu_spin, G_front, C_x, C_y, alpha_f)  # Using dummy vx values since we'll recalculate
+    Fxr, Fyr = tire_dyn(0, 0, mu, mu_spin, G_rear, C_x, C_y, alpha_r)
+    return Fyf, Fyr
+
 def dynamics(x, u):
     pos_x, pos_y, pos_phi, Ux, Uy, r = x
-    vx_cmd, delta = u  # Now using vx_cmd and delta as control inputs
+    vx_cmd, delta = u
     
     # Clip steering angle to physical limits
     delta = np.clip(delta, -steer_max, steer_max)
     
     # Calculate slip angles
-    if Ux == 0 and Uy == 0:
-        alpha_F = alpha_R = 0
-    elif Ux == 0:
-        alpha_F = np.pi / 2 * np.sign(Uy) - delta
-        alpha_R = np.pi / 2 * np.sign(Uy)
-    elif Ux < 0:
-        alpha_F = np.arctan((Uy + a * r) / abs(Ux)) + delta
-        alpha_R = np.arctan((Uy - b * r) / abs(Ux))
-    else:
-        alpha_F = np.arctan((Uy + a * r) / abs(Ux)) - delta
-        alpha_R = np.arctan((Uy - b * r) / abs(Ux))
+    alpha_F, alpha_R = calculate_slip_angles(Ux, Uy, r, delta)
 
-    alpha_F, alpha_R = wrap_to_pi(alpha_F), wrap_to_pi(alpha_R)
-
-    # Calculate tire forces - now using vx_cmd as the commanded longitudinal velocity
+    # Calculate tire forces
     Fxf, Fyf = tire_dyn(Ux, Ux, mu, mu_spin, G_front, C_x, C_y, alpha_F)
     Fxr, Fyr = tire_dyn(Ux, vx_cmd, mu, mu_spin, G_rear, C_x, C_y, alpha_R)
 
@@ -152,16 +160,16 @@ def mpc_cost(U, *args):
     return cost
 
 # MPC parameters
-N = 3  # Prediction horizon
+N = 3 #10  # Prediction horizon
 state = np.array([0.0, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
-# Initial guess for controls - now using [vx_cmd, delta]
-vx_cmd_initial = 0.0
+# Initial guess for controls
+vx_cmd_initial = 0.1
 delta_initial = 0.0
 U0 = [vx_cmd_initial, delta_initial] * N
 
 # Constraints for controls
-bounds = [(0, v_max), (-steer_max, steer_max)] * N  # vx_cmd between 0 and v_max, delta between -steer_max and steer_max
+bounds = [(0, v_max), (-steer_max, steer_max)] * N
 
 # Run MPC
 trajectory = [state]
@@ -197,3 +205,101 @@ for t in range(650):
 trajectory = np.array(trajectory)
 controls = np.array(controls)
 targets = np.array(targets)
+
+########################### Visualization ##########################################
+
+# Static plot
+plt.figure(figsize=(10, 8))
+plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
+plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
+
+# Plot yaw direction
+for i in range(0, len(trajectory), 10):
+    x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
+    yaw_dx = 0.5 * np.cos(yaw)
+    yaw_dy = 0.5 * np.sin(yaw)
+    plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
+
+plt.xlabel('X position')
+plt.ylabel('Y position')
+plt.legend()
+plt.title('MPC - Circular Trajectory with Yaw Visualization')
+plt.grid()
+plt.axis('equal')
+plt.savefig("mpc_trajectory_plot.png")
+plt.show()
+
+# Animation
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Initialize plot elements
+trajectory_line, = ax.plot([], [], 'b-', lw=2, label='Robot Trajectory')
+target_circle_line, = ax.plot([], [], 'g--', label='Target Circle')  
+car_marker, = ax.plot([], [], 'ro', label='Car Position')
+yaw_arrow = ax.arrow(0, 0, 0, 0, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw')
+
+# Text elements
+vx_text = ax.text(0.05, 0.95, 'vx: 0', transform=ax.transAxes, fontsize=12)
+vy_text = ax.text(0.05, 0.90, 'vy: 0', transform=ax.transAxes, fontsize=12)
+delta_text = ax.text(0.05, 0.85, 'delta: 0', transform=ax.transAxes, fontsize=12)
+vx_cmd_text = ax.text(0.05, 0.80, 'vx_cmd: 0', transform=ax.transAxes, fontsize=12)
+alpha_f_text = ax.text(0.05, 0.75, 'alpha_f: 0', transform=ax.transAxes, fontsize=12)
+alpha_r_text = ax.text(0.05, 0.70, 'alpha_r: 0', transform=ax.transAxes, fontsize=12)
+r_text = ax.text(0.05, 0.65, 'r: 0', transform=ax.transAxes, fontsize=12)
+
+ax.set_title("MPC - Circular Trajectory Animation")
+ax.set_xlabel("X Position")
+ax.set_ylabel("Y Position")
+ax.grid()
+ax.axis('equal')
+ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+
+def update(frame):
+    global yaw_arrow
+    
+    if yaw_arrow:
+        yaw_arrow.remove()
+
+    # Update trajectory
+    trajectory_line.set_data(trajectory[:frame, 0], trajectory[:frame, 1])
+    target_circle_line.set_data(targets[:, 0], targets[:, 1])
+    
+    # Update car position and yaw
+    x, y, yaw = trajectory[frame, 0], trajectory[frame, 1], trajectory[frame, 2]
+    car_marker.set_data(x, y)
+    
+    yaw_dx = 0.5 * np.cos(yaw)
+    yaw_dy = 0.5 * np.sin(yaw)
+    yaw_arrow = ax.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
+    
+    # Update text
+    vx = trajectory[frame, 3]
+    vy = trajectory[frame, 4]
+    r = trajectory[frame, 5]
+    vx_cmd, delta = controls[frame, 0], controls[frame, 1]
+    alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
+    
+    vx_text.set_text(f'vx: {vx:.2f} m/s')
+    vy_text.set_text(f'vy: {vy:.2f} m/s')
+    delta_text.set_text(f'delta: {delta:.2f} rad')
+    vx_cmd_text.set_text(f'vx_cmd: {vx_cmd:.2f} m/s')
+    alpha_f_text.set_text(f'alpha_f: {alpha_f:.2f} rad')
+    alpha_r_text.set_text(f'alpha_r: {alpha_r:.2f} rad')
+    r_text.set_text(f'r: {r:.2f} rad/s')
+    
+    # Adjust view
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    buffer = 1.0
+    
+    if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
+        ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
+        ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
+    
+    return trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, delta_text, vx_cmd_text, alpha_f_text, alpha_r_text, r_text
+
+ani = animation.FuncAnimation(
+    fig, update, frames=len(trajectory), interval=50, blit=False
+)
+
+plt.show()
