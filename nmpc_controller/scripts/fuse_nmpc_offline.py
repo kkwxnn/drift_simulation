@@ -145,7 +145,7 @@ def mpc_cost(U, *args):
     J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
     # cost += J_park
 
-    # print(cost)
+    print(cost)
     return cost
 
 
@@ -170,6 +170,7 @@ trajectory = [state]
 controls = []  # Store control inputs (Fx, Delta delta)
 time = [0]  # Time stamps
 targets = []  # Store dynamic targets
+costs = []
 
 for t in range(650):  # 1000
     # Get current target on the circle
@@ -183,6 +184,9 @@ for t in range(650):  # 1000
     if not result.success:
         print("Optimization failed!")
         break
+    
+    # Store the optimal cost
+    costs.append(result.fun)
 
     # Apply the first control input
     U_opt = result.x
@@ -245,7 +249,7 @@ plt.show()
 import matplotlib.animation as animation
 
 # Setup for animation
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots(figsize=(10, 8))  # Slightly larger figure for better text display
 
 # Initialize plot elements
 trajectory_line, = ax.plot([], [], 'b-', lw=2, label='Robot Trajectory')
@@ -253,16 +257,23 @@ target_circle_line, = ax.plot([], [], 'g--', label='Target Circle')
 car_marker, = ax.plot([], [], 'ro', label='Car Position')
 yaw_arrow = ax.arrow(0, 0, 0, 0, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw')
 
-# Add additional text elements for display
-vx_text = ax.text(0.05, 0.95, 'vx: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-vy_text = ax.text(0.05, 0.90, 'vy: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-Fx_text = ax.text(0.05, 0.85, 'Fx: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-Fyf_text = ax.text(0.05, 0.80, 'Fyf: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-Fyr_text = ax.text(0.05, 0.75, 'Fyr: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-alpha_f_text = ax.text(0.05, 0.70, 'Alpha_f: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-alpha_r_text = ax.text(0.05, 0.65, 'Alpha_r: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-cost_text = ax.text(0.05, 0.60, 'Cost: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
-r_text = ax.text(0.05, 0.55, 'r: 0', transform=ax.transAxes, fontsize=12, verticalalignment='top')
+# Add text elements for displaying variables
+text_x = 0.02  # X position of text (relative to axes)
+text_y_start = 0.95  # Starting Y position of text (relative to axes)
+text_spacing = 0.05  # Vertical spacing between text elements
+
+# Create text elements for all the variables we want to display
+vx_text = ax.text(text_x, text_y_start, 'vx: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
+vy_text = ax.text(text_x, text_y_start - text_spacing, 'vy: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
+r_text = ax.text(text_x, text_y_start - 2*text_spacing, 'r: 0', transform=ax.transAxes, fontsize=10)
+delta_text = ax.text(text_x, text_y_start - 3*text_spacing, 'delta: 0', transform=ax.transAxes, fontsize=10)
+Fx_text = ax.text(text_x, text_y_start - 4*text_spacing, 'Fx: 0', transform=ax.transAxes, fontsize=10)
+Delta_delta_text = ax.text(text_x, text_y_start - 5*text_spacing, 'Δdelta: 0', transform=ax.transAxes, fontsize=10)
+alpha_f_text = ax.text(text_x, text_y_start - 6*text_spacing, 'α_f: 0', transform=ax.transAxes, fontsize=10)
+alpha_r_text = ax.text(text_x, text_y_start - 7*text_spacing, 'α_r: 0', transform=ax.transAxes, fontsize=10)
+Fyf_text = ax.text(text_x, text_y_start - 8*text_spacing, 'Fyf: 0', transform=ax.transAxes, fontsize=10)
+Fyr_text = ax.text(text_x, text_y_start - 9*text_spacing, 'Fyr: 0', transform=ax.transAxes, fontsize=10)
+cost_text = ax.text(text_x, text_y_start - 10*text_spacing, 'Cost: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 
 ax.set_title("MPC - Circular Trajectory Animation")
 ax.set_xlabel("X Position")
@@ -291,46 +302,51 @@ def update(frame):
     yaw_arrow = ax.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
 
     # Update target circle
-    target = targets[frame]
-    target_circle_line.set_data(targets[:, 0], targets[:, 1])  # Keep target circle visible
+    target_circle_line.set_data(targets[:, 0], targets[:, 1])
 
-    # # Update target position marker at the current frame
-    # target_position_marker.set_data(target[0], target[1])
-
-    # Get the relevant values for display
-    vx = trajectory[frame, 3]
-    vy = trajectory[frame, 4]
-    Fx = controls[frame, 0]
-    Delta_delta = controls[frame, 1]
-    alpha_f, alpha_r = calculate_slip_angles(vx, vy, trajectory[frame, 5], trajectory[frame, 6])
+    # Get current state and control values
+    current_state = trajectory[frame]
+    if frame < len(controls):
+        current_control = controls[frame]
+    else:
+        current_control = [0, 0]  # Default if we've run out of controls
+    
+    # Calculate slip angles and tire forces
+    vx, vy, r, delta = current_state[3], current_state[4], current_state[5], current_state[6]
+    alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
     Fyf, Fyr = calculate_tire_forces(alpha_f, alpha_r)
-    cost = mpc_cost(U_opt, N, trajectory[frame], target)
-    r = trajectory[frame, 5]
+    
+    # Get the stored cost
+    if frame < len(costs):
+        current_cost = costs[frame]
+    else:
+        current_cost = 0  # Default if we've run out of costs
 
-    # Update the text elements
+    # Update all text elements
     vx_text.set_text(f'vx: {vx:.2f} m/s')
     vy_text.set_text(f'vy: {vy:.2f} m/s')
-    Fx_text.set_text(f'Fx: {Fx:.2f} N')
-    Fyf_text.set_text(f'Fyf: {Fyf :.2f} N')
-    Fyr_text.set_text(f'Fyr: {Fyr :.2f} N')
-    alpha_f_text.set_text(f'Alpha_f: {alpha_f:.2f} rad')
-    alpha_r_text.set_text(f'Alpha_r: {alpha_r:.2f} rad')
-    cost_text.set_text(f'Cost: {cost:.2f}')
-    r_text.set_text(f'r: {r:.2f}')
+    r_text.set_text(f'r: {r:.2f} rad/s')
+    delta_text.set_text(f'delta: {delta:.2f} rad')
+    Fx_text.set_text(f'Fx: {current_control[0]:.2f} N')
+    Delta_delta_text.set_text(f'Δdelta: {current_control[1]:.2f} rad/s')
+    alpha_f_text.set_text(f'α_f: {alpha_f:.2f} rad')
+    alpha_r_text.set_text(f'α_r: {alpha_r:.2f} rad')
+    Fyf_text.set_text(f'Fyf: {Fyf:.2f} N')
+    Fyr_text.set_text(f'Fyr: {Fyr:.2f} N')
+    cost_text.set_text(f'Cost: {current_cost:.6f}')
 
     # Dynamically adjust plot limits
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
-    buffer = 1.0  # Space around the car for visibility
+    buffer = 2.0  # Space around the car for visibility
 
     if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
         ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
         ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
 
-    return trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, Fx_text, Fyf_text, Fyr_text, alpha_f_text, alpha_r_text, cost_text, target_circle_line
-
-# Add target position marker to show the current target
-# target_position_marker, = ax.plot([], [], 'go', label='Target Position')
+    return (trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, r_text, delta_text,
+            Fx_text, Delta_delta_text, alpha_f_text, alpha_r_text, Fyf_text, Fyr_text,
+            cost_text, target_circle_line)
 
 # Adjust legend position to avoid overlap with the text
 ax.legend(loc='upper left', bbox_to_anchor=(1, 1), borderaxespad=0.)
@@ -340,8 +356,7 @@ ani = animation.FuncAnimation(
     fig, update, frames=len(trajectory), interval=50, blit=False
 )
 
+plt.tight_layout()
 plt.show()
-
-
 
 

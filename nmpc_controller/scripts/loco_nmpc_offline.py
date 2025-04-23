@@ -29,9 +29,10 @@ def wrap_to_pi(angle):
 
 def tire_dyn(Ux, Ux_cmd, mu, mu_slide, Fz, C_x, C_y, alpha):
     # Longitudinal wheel slip
-    if abs(Ux_cmd - Ux) < 1e-6:
+    eps = 1e-3
+    if abs(Ux_cmd - Ux) < eps:
         K = 0
-    elif abs(Ux) < 1e-6:
+    elif abs(Ux) < eps:
         Fx = np.sign(Ux_cmd) * mu * Fz
         Fy = 0
         return Fx, Fy
@@ -81,31 +82,57 @@ def calculate_tire_forces(alpha_f, alpha_r):
     Fxr, Fyr = tire_dyn(0, 0, mu, mu_spin, G_rear, C_x, C_y, alpha_r)
     return Fyf, Fyr
 
-def dynamics(x, u):
-    pos_x, pos_y, pos_phi, Ux, Uy, r = x
-    vx_cmd, delta = u
     
+def dynamics(x, u):
+    pos_x, pos_y, pos_phi = x[:3]
+    Ux, Uy, r = x[3:]
+    Ux_cmd, delta = u
+
     # Clip steering angle to physical limits
     delta = np.clip(delta, -steer_max, steer_max)
     
-    # Calculate slip angles
-    alpha_F, alpha_R = calculate_slip_angles(Ux, Uy, r, delta)
+    # Tire Dynamics - lateral slip angle alpha (original calculation preserved)
+    if Ux == 0 and Uy == 0: # vehicle is still no slip
+        alpha_F = alpha_R = 0
+    elif Ux == 0: # perfect side slip
+        alpha_F = np.pi / 2 * np.sign(Uy) - delta
+        alpha_R = np.pi / 2 * np.sign(Uy)
+    elif Ux < 0: # rare ken block situations
+        alpha_F = np.arctan((Uy + a * r) / abs(Ux)) + delta
+        alpha_R = np.arctan((Uy - b * r) / abs(Ux))
+    else: # normal situation
+        alpha_F = np.arctan((Uy + a * r) / abs(Ux)) - delta
+        alpha_R = np.arctan((Uy - b * r) / abs(Ux))
 
-    # Calculate tire forces
-    Fxf, Fyf = tire_dyn(Ux, Ux, mu, mu_spin, G_front, C_x, C_y, alpha_F)
-    Fxr, Fyr = tire_dyn(Ux, vx_cmd, mu, mu_spin, G_rear, C_x, C_y, alpha_R)
+    # Keep alpha in valid range (original approach preserved)
+    alpha_F, alpha_R = wrap_to_pi(alpha_F), wrap_to_pi(alpha_R)
 
-    # Vehicle dynamics equations
+    # Tire forces (modified to use Ux_cmd for front wheels too)
+    Fxf, Fyf = tire_dyn(Ux, Ux_cmd, mu, mu_spin, G_front, C_x, C_y, alpha_F)
+    Fxr, Fyr = tire_dyn(Ux, Ux_cmd, mu, mu_spin, G_rear, C_x, C_y, alpha_R)
+
+    # Vehicle Dynamics (original calculation preserved with sign fix)
     r_dot = (a * Fyf * np.cos(delta) - b * Fyr) / Iz
-    Ux_dot = (Fxr - Fyf * np.sin(delta)) / m + r * Uy
+    Ux_dot = (Fxr + Fyf * np.sin(delta)) / m + r * Uy  # Fixed sign here
     Uy_dot = (Fyf * np.cos(delta) + Fyr) / m - r * Ux
-    
-    # Calculate position changes
-    beta = np.arctan2(Uy, Ux) if (Ux != 0 or Uy != 0) else 0
+
+    # Position update (original beta calculation preserved)
     U = np.sqrt(Ux**2 + Uy**2)
-    
-    pos_x_dot = U * np.cos(pos_phi + beta)
-    pos_y_dot = U * np.sin(pos_phi + beta)
+    if Ux == 0 and Uy == 0:
+        beta = 0
+    elif Ux == 0:
+        beta = np.pi / 2 * np.sign(Uy)
+    elif Ux < 0 and Uy == 0:
+        beta = np.pi
+    elif Ux < 0:
+        beta = np.sign(Uy) * np.pi - np.arctan(Uy / abs(Ux))
+    else:
+        beta = np.arctan(Uy / abs(Ux))
+    beta = wrap_to_pi(beta)
+
+    # Modified position update to properly handle orientation
+    pos_x_dot = Ux * np.cos(pos_phi) - Uy * np.sin(pos_phi)
+    pos_y_dot = Ux * np.sin(pos_phi) + Uy * np.cos(pos_phi)
     
     return np.array([pos_x_dot, pos_y_dot, r, Ux_dot, Uy_dot, r_dot])
 
@@ -145,18 +172,21 @@ def mpc_cost(U, *args):
         
         x, y, yaw, vx, vy, r = current_state
         
-        # Position error
-        pos_error = (x - target[0])**2 + (y - target[1])**2
+        # # Position error
+        # pos_error = (x - target[0])**2 + (y - target[1])**2
         
-        # Velocity and yaw rate tracking
-        vel_cost = alpha_vx*(vx - vx_goal)**2 + alpha_r*(r - r_goal)**2
+        # # Velocity and yaw rate tracking
+        # vel_cost = alpha_vx*(vx - vx_goal)**2 + alpha_r*(r - r_goal)**2
         
-        # Heading error
-        diff_yaw = yaw - target[2]
-        heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
+        # # Heading error
+        # diff_yaw = yaw - target[2]
+        # heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
         
-        cost += vel_cost + alpha_pos*pos_error + heading_error
-        
+        # cost += vel_cost + alpha_pos*pos_error + heading_error
+        # print(cost)
+
+        ## แก้ cost
+
     return cost
 
 # MPC parameters
@@ -164,7 +194,7 @@ N = 3 #10  # Prediction horizon
 state = np.array([0.0, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
 # Initial guess for controls
-vx_cmd_initial = 0.1
+vx_cmd_initial = 1.0
 delta_initial = 0.0
 U0 = [vx_cmd_initial, delta_initial] * N
 
@@ -176,6 +206,7 @@ trajectory = [state]
 controls = []
 time = [0]
 targets = []
+costs = []
 
 for t in range(650):
     target = circle_target(t * dt, circle_radius, circle_center)
@@ -189,6 +220,9 @@ for t in range(650):
     if not result.success:
         print("Optimization failed!")
         break
+
+    # Store the optimal cost
+    costs.append(result.fun)
 
     U_opt = result.x
     control = U_opt[:2]
@@ -230,7 +264,12 @@ plt.savefig("mpc_trajectory_plot.png")
 plt.show()
 
 # Animation
-fig, ax = plt.subplots(figsize=(8, 6))
+########################### Visualize in animation ##########################################
+
+import matplotlib.animation as animation
+
+# Setup for animation
+fig, ax = plt.subplots(figsize=(10, 8))  # Slightly larger figure for better text display
 
 # Initialize plot elements
 trajectory_line, = ax.plot([], [], 'b-', lw=2, label='Robot Trajectory')
@@ -238,68 +277,104 @@ target_circle_line, = ax.plot([], [], 'g--', label='Target Circle')
 car_marker, = ax.plot([], [], 'ro', label='Car Position')
 yaw_arrow = ax.arrow(0, 0, 0, 0, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw')
 
-# Text elements
-vx_text = ax.text(0.05, 0.95, 'vx: 0', transform=ax.transAxes, fontsize=12)
-vy_text = ax.text(0.05, 0.90, 'vy: 0', transform=ax.transAxes, fontsize=12)
-delta_text = ax.text(0.05, 0.85, 'delta: 0', transform=ax.transAxes, fontsize=12)
-vx_cmd_text = ax.text(0.05, 0.80, 'vx_cmd: 0', transform=ax.transAxes, fontsize=12)
-alpha_f_text = ax.text(0.05, 0.75, 'alpha_f: 0', transform=ax.transAxes, fontsize=12)
-alpha_r_text = ax.text(0.05, 0.70, 'alpha_r: 0', transform=ax.transAxes, fontsize=12)
-r_text = ax.text(0.05, 0.65, 'r: 0', transform=ax.transAxes, fontsize=12)
+# Add text elements for displaying variables
+text_x = 0.02  # X position of text (relative to axes)
+text_y_start = 0.95  # Starting Y position of text (relative to axes)
+text_spacing = 0.05  # Vertical spacing between text elements
+
+# Create text elements for all the variables we want to display
+vx_text = ax.text(text_x, text_y_start, 'vx: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
+vy_text = ax.text(text_x, text_y_start - text_spacing, 'vy: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
+r_text = ax.text(text_x, text_y_start - 2*text_spacing, 'r: 0', transform=ax.transAxes, fontsize=10)
+delta_text = ax.text(text_x, text_y_start - 3*text_spacing, 'delta: 0', transform=ax.transAxes, fontsize=10)
+Fx_text = ax.text(text_x, text_y_start - 4*text_spacing, 'Fx: 0', transform=ax.transAxes, fontsize=10)
+Delta_delta_text = ax.text(text_x, text_y_start - 5*text_spacing, 'Δdelta: 0', transform=ax.transAxes, fontsize=10)
+alpha_f_text = ax.text(text_x, text_y_start - 6*text_spacing, 'α_f: 0', transform=ax.transAxes, fontsize=10)
+alpha_r_text = ax.text(text_x, text_y_start - 7*text_spacing, 'α_r: 0', transform=ax.transAxes, fontsize=10)
+Fyf_text = ax.text(text_x, text_y_start - 8*text_spacing, 'Fyf: 0', transform=ax.transAxes, fontsize=10)
+Fyr_text = ax.text(text_x, text_y_start - 9*text_spacing, 'Fyr: 0', transform=ax.transAxes, fontsize=10)
+cost_text = ax.text(text_x, text_y_start - 10*text_spacing, 'Cost: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 
 ax.set_title("MPC - Circular Trajectory Animation")
 ax.set_xlabel("X Position")
 ax.set_ylabel("Y Position")
 ax.grid()
 ax.axis('equal')
-ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
 
+# Update function for animation
 def update(frame):
     global yaw_arrow
-    
-    if yaw_arrow:
+
+    # Clear the previous arrow if it exists
+    if 'yaw_arrow' in globals() and yaw_arrow:
         yaw_arrow.remove()
 
     # Update trajectory
-    trajectory_line.set_data(trajectory[:frame, 0], trajectory[:frame, 1])
-    target_circle_line.set_data(targets[:, 0], targets[:, 1])
-    
-    # Update car position and yaw
+    trajectory_line.set_data(trajectory[:frame+1, 0], trajectory[:frame+1, 1])
+
+    # Update car position
+    car_marker.set_data(trajectory[frame, 0], trajectory[frame, 1])
+
+    # Update yaw arrow
     x, y, yaw = trajectory[frame, 0], trajectory[frame, 1], trajectory[frame, 2]
-    car_marker.set_data(x, y)
-    
     yaw_dx = 0.5 * np.cos(yaw)
     yaw_dy = 0.5 * np.sin(yaw)
     yaw_arrow = ax.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
+
+    # Update target circle
+    target_circle_line.set_data(targets[:, 0], targets[:, 1])
+
+    # Get current state and control values
+    current_state = trajectory[frame]
+    vx, vy, r = current_state[3], current_state[4], current_state[5]
     
-    # Update text
-    vx = trajectory[frame, 3]
-    vy = trajectory[frame, 4]
-    r = trajectory[frame, 5]
-    vx_cmd, delta = controls[frame, 0], controls[frame, 1]
+    if frame < len(controls):
+        current_control = controls[frame]
+        delta = current_control[1]  # delta is the second element in control pair
+    else:
+        current_control = [0, 0]
+        delta = 0
+    
+    # Calculate slip angles and tire forces
     alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
+    Fyf, Fyr = calculate_tire_forces(alpha_f, alpha_r)
     
+    # Get the stored cost
+    current_cost = costs[frame] if frame < len(costs) else 0
+
+    # Update all text elements
     vx_text.set_text(f'vx: {vx:.2f} m/s')
     vy_text.set_text(f'vy: {vy:.2f} m/s')
-    delta_text.set_text(f'delta: {delta:.2f} rad')
-    vx_cmd_text.set_text(f'vx_cmd: {vx_cmd:.2f} m/s')
-    alpha_f_text.set_text(f'alpha_f: {alpha_f:.2f} rad')
-    alpha_r_text.set_text(f'alpha_r: {alpha_r:.2f} rad')
     r_text.set_text(f'r: {r:.2f} rad/s')
-    
-    # Adjust view
+    delta_text.set_text(f'delta: {delta:.2f} rad')
+    Fx_text.set_text(f'Fx cmd: {current_control[0]:.2f} m/s')
+    Delta_delta_text.set_text(f'delta cmd: {delta:.2f} rad')
+    alpha_f_text.set_text(f'α_f: {alpha_f:.2f} rad')
+    alpha_r_text.set_text(f'α_r: {alpha_r:.2f} rad')
+    Fyf_text.set_text(f'Fyf: {Fyf:.2f} N')
+    Fyr_text.set_text(f'Fyr: {Fyr:.2f} N')
+    cost_text.set_text(f'Cost: {current_cost:.6f}')
+
+    # Dynamically adjust plot limits
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
-    buffer = 1.0
-    
+    buffer = 2.0  # Space around the car for visibility
+
     if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
         ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
         ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
-    
-    return trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, delta_text, vx_cmd_text, alpha_f_text, alpha_r_text, r_text
 
+    return (trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, r_text, delta_text,
+            Fx_text, Delta_delta_text, alpha_f_text, alpha_r_text, Fyf_text, Fyr_text,
+            cost_text, target_circle_line)
+
+# Adjust legend position to avoid overlap with the text
+ax.legend(loc='upper left', bbox_to_anchor=(1, 1), borderaxespad=0.)
+
+# Create animation
 ani = animation.FuncAnimation(
     fig, update, frames=len(trajectory), interval=50, blit=False
 )
 
+plt.tight_layout()
 plt.show()
