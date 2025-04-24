@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 import matplotlib.animation as animation
 
 # Vehicle parameters 
-dt = 0.02
+dt = 0.02 # 0.02
 m = 2.35
 L = 0.257
 g = 9.81
@@ -162,7 +162,6 @@ def mpc_cost(U, *args):
 
     alpha_vx = 1.0
     alpha_r = 1.0
-    alpha_pos = 10.0
 
     current_state = state.copy()
     
@@ -172,20 +171,20 @@ def mpc_cost(U, *args):
         
         x, y, yaw, vx, vy, r = current_state
         
-        # # Position error
-        # pos_error = (x - target[0])**2 + (y - target[1])**2
-        
-        # # Velocity and yaw rate tracking
-        # vel_cost = alpha_vx*(vx - vx_goal)**2 + alpha_r*(r - r_goal)**2
-        
-        # # Heading error
-        # diff_yaw = yaw - target[2]
-        # heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
-        
-        # cost += vel_cost + alpha_pos*pos_error + heading_error
-        # print(cost)
+        w_ss = alpha_vx*(vx - vx_goal)**2 + alpha_r*(r - r_goal)**2 # mpc circular cost function
+        cost += w_ss
 
-        ## แก้ cost
+    # Transient Drift Parking
+    x_target, y_target, yaw_target = target
+    position_error = (x - x_target)**2 + (y - y_target)**2
+    diff_yaw = yaw - yaw_target
+    heading_error = (np.arctan2(np.sin(diff_yaw), np.cos(diff_yaw)))**2
+
+    # Cost for Parking
+    J_park = position_error + heading_error + (vx**2) + (vy**2) + (r**2)
+    # cost += J_park
+
+    print(cost)
 
     return cost
 
@@ -194,7 +193,7 @@ N = 3 #10  # Prediction horizon
 state = np.array([0.0, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
 # Initial guess for controls
-vx_cmd_initial = 1.0
+vx_cmd_initial = 0.1
 delta_initial = 0.0
 U0 = [vx_cmd_initial, delta_initial] * N
 
@@ -242,10 +241,17 @@ targets = np.array(targets)
 
 ########################### Visualization ##########################################
 
-# Static plot
+# Static plot with full target circle
 plt.figure(figsize=(10, 8))
+
+# Plot the complete target circle (using more points)
+theta = np.linspace(0, 2*np.pi, 100)
+full_circle_x = circle_center[0] + circle_radius * np.cos(theta)
+full_circle_y = circle_center[1] + circle_radius * np.sin(theta)
+plt.plot(full_circle_x, full_circle_y, 'g--', label='Target Circle', linewidth=1.5)
+
+# Plot robot trajectory
 plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
-plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
 
 # Plot yaw direction
 for i in range(0, len(trajectory), 10):
@@ -257,32 +263,28 @@ for i in range(0, len(trajectory), 10):
 plt.xlabel('X position')
 plt.ylabel('Y position')
 plt.legend()
-plt.title('MPC - Circular Trajectory with Yaw Visualization')
+plt.title('MPC - Circular Trajectory with Full Target Circle')
 plt.grid()
 plt.axis('equal')
-plt.savefig("mpc_trajectory_plot.png")
+plt.savefig("mpc_trajectory_plot_full_circle.png")
 plt.show()
 
-# Animation
-########################### Visualize in animation ##########################################
+# Animation with full target circle
+fig, ax = plt.subplots(figsize=(10, 8))
 
-import matplotlib.animation as animation
-
-# Setup for animation
-fig, ax = plt.subplots(figsize=(10, 8))  # Slightly larger figure for better text display
-
-# Initialize plot elements
+# Initialize plot elements with full circle
+theta = np.linspace(0, 2*np.pi, 100)
+full_circle_x = circle_center[0] + circle_radius * np.cos(theta)
+full_circle_y = circle_center[1] + circle_radius * np.sin(theta)
+target_circle_line, = ax.plot(full_circle_x, full_circle_y, 'g--', label='Target Circle')
 trajectory_line, = ax.plot([], [], 'b-', lw=2, label='Robot Trajectory')
-target_circle_line, = ax.plot([], [], 'g--', label='Target Circle')  
 car_marker, = ax.plot([], [], 'ro', label='Car Position')
 yaw_arrow = ax.arrow(0, 0, 0, 0, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw')
 
-# Add text elements for displaying variables
-text_x = 0.02  # X position of text (relative to axes)
-text_y_start = 0.95  # Starting Y position of text (relative to axes)
-text_spacing = 0.05  # Vertical spacing between text elements
-
-# Create text elements for all the variables we want to display
+# Add text elements (same as before)
+text_x = 0.02
+text_y_start = 0.95
+text_spacing = 0.05
 vx_text = ax.text(text_x, text_y_start, 'vx: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 vy_text = ax.text(text_x, text_y_start - text_spacing, 'vy: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 r_text = ax.text(text_x, text_y_start - 2*text_spacing, 'r: 0', transform=ax.transAxes, fontsize=10)
@@ -295,54 +297,42 @@ Fyf_text = ax.text(text_x, text_y_start - 8*text_spacing, 'Fyf: 0', transform=ax
 Fyr_text = ax.text(text_x, text_y_start - 9*text_spacing, 'Fyr: 0', transform=ax.transAxes, fontsize=10)
 cost_text = ax.text(text_x, text_y_start - 10*text_spacing, 'Cost: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 
-ax.set_title("MPC - Circular Trajectory Animation")
+ax.set_title("MPC - Circular Trajectory Animation with Full Target Circle")
 ax.set_xlabel("X Position")
 ax.set_ylabel("Y Position")
 ax.grid()
 ax.axis('equal')
 
-# Update function for animation
+# Update function remains the same
 def update(frame):
     global yaw_arrow
 
-    # Clear the previous arrow if it exists
     if 'yaw_arrow' in globals() and yaw_arrow:
         yaw_arrow.remove()
 
-    # Update trajectory
     trajectory_line.set_data(trajectory[:frame+1, 0], trajectory[:frame+1, 1])
-
-    # Update car position
     car_marker.set_data(trajectory[frame, 0], trajectory[frame, 1])
 
-    # Update yaw arrow
     x, y, yaw = trajectory[frame, 0], trajectory[frame, 1], trajectory[frame, 2]
     yaw_dx = 0.5 * np.cos(yaw)
     yaw_dy = 0.5 * np.sin(yaw)
     yaw_arrow = ax.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
 
-    # Update target circle
-    target_circle_line.set_data(targets[:, 0], targets[:, 1])
-
-    # Get current state and control values
     current_state = trajectory[frame]
     vx, vy, r = current_state[3], current_state[4], current_state[5]
     
     if frame < len(controls):
         current_control = controls[frame]
-        delta = current_control[1]  # delta is the second element in control pair
+        delta = current_control[1]
     else:
         current_control = [0, 0]
         delta = 0
     
-    # Calculate slip angles and tire forces
     alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
     Fyf, Fyr = calculate_tire_forces(alpha_f, alpha_r)
     
-    # Get the stored cost
     current_cost = costs[frame] if frame < len(costs) else 0
 
-    # Update all text elements
     vx_text.set_text(f'vx: {vx:.2f} m/s')
     vy_text.set_text(f'vy: {vy:.2f} m/s')
     r_text.set_text(f'r: {r:.2f} rad/s')
@@ -355,10 +345,9 @@ def update(frame):
     Fyr_text.set_text(f'Fyr: {Fyr:.2f} N')
     cost_text.set_text(f'Cost: {current_cost:.6f}')
 
-    # Dynamically adjust plot limits
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
-    buffer = 2.0  # Space around the car for visibility
+    buffer = 2.0
 
     if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
         ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
@@ -368,10 +357,8 @@ def update(frame):
             Fx_text, Delta_delta_text, alpha_f_text, alpha_r_text, Fyf_text, Fyr_text,
             cost_text, target_circle_line)
 
-# Adjust legend position to avoid overlap with the text
 ax.legend(loc='upper left', bbox_to_anchor=(1, 1), borderaxespad=0.)
 
-# Create animation
 ani = animation.FuncAnimation(
     fig, update, frames=len(trajectory), interval=50, blit=False
 )
