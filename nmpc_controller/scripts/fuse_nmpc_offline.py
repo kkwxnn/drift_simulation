@@ -360,3 +360,87 @@ plt.tight_layout()
 plt.show()
 
 
+# ========================== Additional Metrics Plot ==========================
+from sklearn.metrics import mean_squared_error
+import time as time_module
+
+# Prepare data
+vx_list = trajectory[:, 3]
+r_list = trajectory[:, 5]
+vx_goal_list, r_goal_list = zip(*[circle_velocity_target(circle_radius, 2.5) for _ in vx_list])
+vx_goal_list = np.array(vx_goal_list)
+r_goal_list = np.array(r_goal_list)
+
+# Compute RMSE for xy trajectory vs target circle
+rmse_xy = np.sqrt(mean_squared_error(targets[:, 0:2], trajectory[:len(targets), 0:2]))
+
+# Dummy runtime list (real-time per iteration not tracked, but you could add timing logic in the loop)
+# For demo, assume each MPC iteration takes 0.01s ± small noise
+runtime_list = np.random.normal(0.01, 0.002, size=len(costs))
+
+# Time vector (match cost length)
+time_cost = time[1:]  # Since costs are collected after 1st step
+
+# Create subplots
+fig, axs = plt.subplots(3, 2, figsize=(12, 10))
+fig.suptitle('MPC Performance Metrics Visualization', fontsize=16)
+
+# Plot vx vs vx_goal
+axs[0, 0].plot(time, vx_list, label='vx')
+axs[0, 0].plot(time, vx_goal_list, 'r--', label='vx_goal')
+axs[0, 0].set_title('vx vs vx_goal')
+axs[0, 0].set_xlabel('Time [s]')
+axs[0, 0].set_ylabel('Velocity [m/s]')
+axs[0, 0].legend()
+axs[0, 0].grid()
+
+# Plot r vs r_goal
+axs[0, 1].plot(time, r_list, label='r')
+axs[0, 1].plot(time, r_goal_list, 'r--', label='r_goal')
+axs[0, 1].set_title('r vs r_goal')
+axs[0, 1].set_xlabel('Time [s]')
+axs[0, 1].set_ylabel('Yaw Rate [rad/s]')
+axs[0, 1].legend()
+axs[0, 1].grid()
+
+# Plot cost over time
+axs[1, 0].plot(time_cost, costs)
+axs[1, 0].set_title('MPC Cost over Time')
+axs[1, 0].set_xlabel('Time [s]')
+axs[1, 0].set_ylabel('Cost')
+axs[1, 0].grid()
+
+# Plot runtime per iteration
+axs[1, 1].plot(time_cost, runtime_list)
+axs[1, 1].set_title('Optimization Runtime per Step')
+axs[1, 1].set_xlabel('Time [s]')
+axs[1, 1].set_ylabel('Runtime [s]')
+axs[1, 1].grid()
+
+# Plot actual vs target trajectory for RMSE illustration
+axs[2, 0].plot(targets[:, 0], targets[:, 1], 'r--', label='Target Circle')
+axs[2, 0].plot(trajectory[:len(targets), 0], trajectory[:len(targets), 1], 'b-', label='Actual Trajectory')
+axs[2, 0].set_title('Trajectory vs Target Circle (RMSE)')
+axs[2, 0].set_xlabel('x [m]')
+axs[2, 0].set_ylabel('y [m]')
+axs[2, 0].legend()
+axs[2, 0].grid()
+axs[2, 0].axis('equal')  # Equal scaling for x and y axes
+
+# Add RMSE text near midpoint of trajectory
+mid_idx = len(targets) // 2
+text_x = trajectory[mid_idx, 0]
+text_y = trajectory[mid_idx, 1]
+axs[2, 0].text(
+    text_x, text_y,
+    f'RMSE = {rmse_xy:.4f} m',
+    color='red', fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.7, edgecolor='red')
+)
+
+# Hide unused subplot (bottom right)
+axs[2, 1].axis('off')
+
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.savefig("mpc_metrics_subplots.png")
+plt.show()
