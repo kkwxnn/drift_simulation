@@ -205,7 +205,7 @@ def mpc_cost(U, *args):
     return cost
 
 # MPC parameters
-N = 3 #10  # Prediction horizon
+N = 3 # 10  # Prediction horizon
 
 state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
@@ -269,6 +269,10 @@ trajectory = np.array(trajectory)
 controls = np.array(controls)
 targets = np.array(targets)
 
+vx_goal_list, r_goal_list = zip(*[circle_velocity_target(circle_radius, 2.5) for _ in trajectory[:, 3]])
+vx_goal_list = np.array(vx_goal_list)
+r_goal_list = np.array(r_goal_list)
+
 ########################### Visualize Trajectory in graph ##########################################
 
 # Plot trajectory, target circle, yaw, and velocity direction
@@ -298,10 +302,16 @@ for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
 # Compute RMSE for xy trajectory vs target circle
 rmse_xy = np.sqrt(mean_squared_error(targets[:, 0:2], trajectory[:len(targets), 0:2]))
 
+# Compute RMSE for r and rg (yaw rate)
+rmse_r = np.sqrt(mean_squared_error(r_goal_list, trajectory[:, 5]))
+
+# Compute RMSE for vx and vxg (longitudinal velocity)
+rmse_vx = np.sqrt(mean_squared_error(vx_goal_list, trajectory[:, 3]))
+
 # Add RMSE text on the plot (in axes coordinates)
 plt.text(
-    0.80, 0.05,  # x, y in axes fraction (0 to 1)
-    f'RMSE = {rmse_xy:.4f} m',
+    0.80, 0.10,  # Adjusted y position to avoid overlap with previous text
+    f'RMSE Position = {rmse_xy:.4f} m\nRMSE r (yaw rate) = {rmse_r:.4f} rad/s\nRMSE vx = {rmse_vx:.4f} m/s',
     transform=plt.gca().transAxes,  # Use current Axes for coordinate transform
     color='red',
     fontsize=10,
