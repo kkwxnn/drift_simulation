@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 import matplotlib.animation as animation
+from sklearn.metrics import mean_squared_error
+import time 
 
 # Vehicle parameters 
 m = 2.35
@@ -293,7 +295,19 @@ for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
     # Plot the yaw direction as arrows
     plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
 
-    
+# Compute RMSE for xy trajectory vs target circle
+rmse_xy = np.sqrt(mean_squared_error(targets[:, 0:2], trajectory[:len(targets), 0:2]))
+
+# Add RMSE text on the plot (in axes coordinates)
+plt.text(
+    0.80, 0.05,  # x, y in axes fraction (0 to 1)
+    f'RMSE = {rmse_xy:.4f} m',
+    transform=plt.gca().transAxes,  # Use current Axes for coordinate transform
+    color='red',
+    fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.7, edgecolor='red')
+)
+
 plt.xlabel('X position')
 plt.ylabel('Y position')
 plt.legend()
@@ -372,7 +386,7 @@ def update(frame):
     vx_text.set_text(f'vx: {vx:.2f} m/s')
     vy_text.set_text(f'vy: {vy:.2f} m/s')
     r_text.set_text(f'r: {r:.2f} rad/s')
-    vx_cmd_text.set_text(f'Fx cmd: {current_control[0]:.2f} m/s')
+    vx_cmd_text.set_text(f'vx cmd: {current_control[0]:.2f} m/s')
     delta_text.set_text(f'delta: {current_control[1]:.2f} rad')
     alpha_f_text.set_text(f'α_f: {alpha_f:.2f} rad')
     alpha_r_text.set_text(f'α_r: {alpha_r:.2f} rad')
@@ -405,8 +419,6 @@ plt.tight_layout()
 plt.show()
 
 # ========================== Additional Metrics Plot ==========================
-from sklearn.metrics import mean_squared_error
-import time 
 
 sim_time = np.linspace(0, len(trajectory) * 0.1, len(trajectory))  # Time vector for plotting
 
@@ -417,9 +429,6 @@ r_list = trajectory[:, 5]
 vx_goal_list, r_goal_list = zip(*[circle_velocity_target(circle_radius, 2.5) for _ in vx_list])
 vx_goal_list = np.array(vx_goal_list)
 r_goal_list = np.array(r_goal_list)
-
-# Compute RMSE for xy trajectory vs target circle
-rmse_xy = np.sqrt(mean_squared_error(targets[:, 0:2], trajectory[:len(targets), 0:2]))
 
 # Dummy runtime list (real-time per iteration not tracked, but you could add timing logic in the loop)
 # For demo, assume each MPC iteration takes 0.01s ± small noise
@@ -466,24 +475,14 @@ axs[1, 1].set_ylabel('vy [m/s]')
 axs[1, 1].legend()
 axs[1, 1].grid()
 
-# Plot actual vs target trajectory for RMSE illustration
-axs[2, 0].plot(target_x, target_y, 'g--', label='Target Circle')
-axs[2, 0].plot(trajectory[:len(targets), 0], trajectory[:len(targets), 1], 'b-', label='Actual Trajectory')
-axs[2, 0].set_title('Trajectory vs Target Circle (RMSE)')
-axs[2, 0].set_xlabel('x [m]')
-axs[2, 0].set_ylabel('y [m]')
-axs[2, 0].legend(loc='upper right')  # Move legend to upper right
-axs[2, 0].grid()
-axs[2, 0].axis('equal')  # Equal scaling for x and y axes
-
-# Add RMSE text at bottom-left in axes coordinates to avoid overlap
-axs[2, 0].text(
-    0.65, 0.05,
-    f'RMSE = {rmse_xy:.4f} m',
-    transform=axs[2, 0].transAxes,
-    color='red', fontsize=10,
-    bbox=dict(facecolor='white', alpha=0.7, edgecolor='red')
-)
+# Plot Control Input
+axs[2, 0].plot(sim_time[:-1], controls[:, 0], label='vx_cmd (m/s)', color='blue')
+axs[2, 0].plot(sim_time[:-1], controls[:, 1], label='delta (rad)', color='orange')
+axs[2, 0].set_title('Control Inputs Over Time')
+axs[2, 0].set_xlabel('Time [s]')
+axs[2, 0].set_ylabel('Control Value')
+axs[2, 0].legend()
+axs[2, 0].grid(True)
 
 # Plot runtime per iteration
 axs[2, 1].plot(time_cost, runtime_list, color='blue', label='Runtime per Iteration')
