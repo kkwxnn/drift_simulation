@@ -158,7 +158,15 @@ def circle_velocity_target(radius, v):
 def mpc_cost(U, *args):
     N, state, target = args
     cost = 0.0
-    vx_goal, r_goal = circle_velocity_target(circle_radius, v_max)
+
+    x, y, yaw, vx, vy, r = state
+
+    if vx >= 0:
+        v = v_max
+    elif vx < 0:
+        v = -v_max
+    
+    vx_goal, r_goal = circle_velocity_target(circle_radius, v)
 
     alpha_vx = 1.0
     alpha_r = 1.0

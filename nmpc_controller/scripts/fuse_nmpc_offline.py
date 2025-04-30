@@ -16,6 +16,8 @@ Br, Cr, Dr = 2.0, 1.2, -1.0
 v_blend_min = 0.1
 v_blend_max = 2.5
 # v_blend_max = 5.0
+v_max = 2.5 # m/s
+steer_max = 0.698 # rad
 
 # Define parameters
 dt = 0.1 # 0.02  # time step
@@ -25,7 +27,8 @@ circle_center = np.array([0, 0])  # Center of the circle
 
 # Generate circle trajectory
 def circle_target(t, radius, center):
-    angle = t * 0.1  # Angular velocity (radians per second)
+    angle = t * 0.1  # This will make the angle grow over time
+    angle = angle % (2 * np.pi)  # Ensure it loops over a full circle
     x = center[0] + radius * np.cos(angle)
     y = center[1] + radius * np.sin(angle)
 
@@ -120,7 +123,14 @@ def mpc_cost(U, *args):
     N, state, target = args
     cost = 0.0
 
-    vx_goal, r_goal = circle_velocity_target(circle_radius, 2.5) # 2.5 is v_max
+    x, y, yaw, vx, vy, r, delta = state
+
+    if vx >= 0:
+        v = v_max
+    elif vx < 0:
+        v = -v_max
+    
+    vx_goal, r_goal = circle_velocity_target(circle_radius, v)
 
     alpha_vx = 1.0
     alpha_r = 1.0
@@ -150,12 +160,24 @@ def mpc_cost(U, *args):
 
 
 # MPC parameters
-N = 3 #10 # 3  # Prediction horizon
-# state = np.array([10.0, 0, np.pi/2, 0, 0, 0, 0])  # Initial state 
+N = 3 # 10 # 3  # Prediction horizon
+
 state = np.array([0.0, 0, np.pi/2, 0, 0, 0, 0]) 
 
 # Initial guess for controls
-# U0 = np.zeros(2 * N)
+
+# Random Initial guess
+# Fx_bound = (-v_max, v_max)  
+# Delta_delta_bound = (-steer_max, steer_max)
+
+# Fx_initial = np.random.uniform(Fx_bound[0], Fx_bound[1], N)
+# Delta_delta_initial = np.random.uniform(Delta_delta_bound[0], Delta_delta_bound[1], N)
+
+# U0 = np.zeros(2 * N) 
+# U0[::2] = Fx_initial 
+# U0[1::2] = Delta_delta_initial  
+
+# Zeros Initial guess
 Fx_initial = 0.0  # Constant guess for Fx
 Delta_delta_initial = 0.0  # Constant guess for Delta delta
 
@@ -172,7 +194,7 @@ time = [0]  # Time stamps
 targets = []  # Store dynamic targets
 costs = []
 
-for t in range(650):  # 1000
+for t in range(200):  # 1000
     # Get current target on the circle
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
@@ -205,21 +227,30 @@ trajectory = np.array(trajectory)
 controls = np.array(controls)
 targets = np.array(targets)
 
-########################### Visualize in graph ##########################################
+########################### Visualize Trajectory in graph ##########################################
 
 # Plot trajectory, target circle, yaw, and velocity direction
 plt.figure(figsize=(10, 8))
-plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
-plt.plot(targets[:, 0], targets[:, 1], '--', label='Target Circle', linewidth=1.5)
 
-# Plot yaw direction
+# Plot robot trajectory
+plt.plot(trajectory[:, 0], trajectory[:, 1], 'b-', label='Robot Trajectory', linewidth=2)
+
+# Plot target circle (green dashed line)
+theta = np.linspace(0, 2 * np.pi, 100)
+target_x = targets[0, 0] + circle_radius * np.cos(theta)  # Use scalar value of target center
+target_y = targets[0, 1] + circle_radius * np.sin(theta)  # Use scalar value of target center
+plt.plot(target_x, target_y, 'g--', label='Target Circle', linewidth=1.5)
+
+# Plot yaw direction (velocity direction as arrows)
 for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
     x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
     vx, vy = trajectory[i, 3], trajectory[i, 4]
 
-    # Yaw direction
+    # Yaw direction (scaled for better visualization)
     yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
     yaw_dy = 0.5 * np.sin(yaw)
+
+    # Plot the yaw direction as arrows
     plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
 
     
@@ -229,7 +260,8 @@ plt.legend()
 plt.title('MPC - Circular Trajectory with Yaw Visualization')
 plt.grid()
 plt.axis('equal')
-plt.savefig("mpc_trajectory_plot.png")
+plt.savefig(f"Model1_r_{circle_radius}_N_{N}_dt_{dt}_trajectory.png")
+print("Save Trajectory!")
 plt.show()
 
 # # Plot control inputs (delta and acceleration)
@@ -293,7 +325,7 @@ def update(frame):
     trajectory_line.set_data(trajectory[:frame, 0], trajectory[:frame, 1])
 
     # Update car position
-    car_marker.set_data(trajectory[frame, 0], trajectory[frame, 1])
+    car_marker.set_data([trajectory[frame, 0]], [trajectory[frame, 1]])
 
     # Update yaw arrow
     x, y, yaw = trajectory[frame, 0], trajectory[frame, 1], trajectory[frame, 2]
@@ -302,38 +334,20 @@ def update(frame):
     yaw_arrow = ax.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r')
 
     # Update target circle
-    target_circle_line.set_data(targets[:, 0], targets[:, 1])
+    theta = np.linspace(0, 2 * np.pi, 100)
+    target_x = circle_center[0] + circle_radius * np.cos(theta)
+    target_y = circle_center[1] + circle_radius * np.sin(theta)
+    target_circle_line.set_data(target_x, target_y)
 
-    # Get current state and control values
+    # Update text elements (optional)
     current_state = trajectory[frame]
-    if frame < len(controls):
-        current_control = controls[frame]
-    else:
-        current_control = [0, 0]  # Default if we've run out of controls
-    
-    # Calculate slip angles and tire forces
     vx, vy, r, delta = current_state[3], current_state[4], current_state[5], current_state[6]
-    alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
-    Fyf, Fyr = calculate_tire_forces(alpha_f, alpha_r)
-    
-    # Get the stored cost
-    if frame < len(costs):
-        current_cost = costs[frame]
-    else:
-        current_cost = 0  # Default if we've run out of costs
 
-    # Update all text elements
+    # Update the variables displayed as text
     vx_text.set_text(f'vx: {vx:.2f} m/s')
     vy_text.set_text(f'vy: {vy:.2f} m/s')
     r_text.set_text(f'r: {r:.2f} rad/s')
     delta_text.set_text(f'delta: {delta:.2f} rad')
-    Fx_text.set_text(f'Fx: {current_control[0]:.2f} N')
-    Delta_delta_text.set_text(f'Δdelta: {current_control[1]:.2f} rad/s')
-    alpha_f_text.set_text(f'α_f: {alpha_f:.2f} rad')
-    alpha_r_text.set_text(f'α_r: {alpha_r:.2f} rad')
-    Fyf_text.set_text(f'Fyf: {Fyf:.2f} N')
-    Fyr_text.set_text(f'Fyr: {Fyr:.2f} N')
-    cost_text.set_text(f'Cost: {current_cost:.6f}')
 
     # Dynamically adjust plot limits
     x_min, x_max = ax.get_xlim()
@@ -345,8 +359,8 @@ def update(frame):
         ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
 
     return (trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, r_text, delta_text,
-            Fx_text, Delta_delta_text, alpha_f_text, alpha_r_text, Fyf_text, Fyr_text,
-            cost_text, target_circle_line)
+            target_circle_line)
+
 
 # Adjust legend position to avoid overlap with the text
 ax.legend(loc='upper left', bbox_to_anchor=(1, 1), borderaxespad=0.)
@@ -356,16 +370,22 @@ ani = animation.FuncAnimation(
     fig, update, frames=len(trajectory), interval=50, blit=False
 )
 
+# ani.save(f"Model1_r_{circle_radius}_N_{N}_dt_{dt}_animation..gif", writer='pillow', fps=20, dpi=150)
+print("Save GIF!")
+
 plt.tight_layout()
 plt.show()
 
 
 # ========================== Additional Metrics Plot ==========================
 from sklearn.metrics import mean_squared_error
-import time as time_module
+import time 
+
+sim_time = np.linspace(0, len(trajectory) * 0.1, len(trajectory))  # Time vector for plotting
 
 # Prepare data
 vx_list = trajectory[:, 3]
+vy_list = trajectory[:, 4]
 r_list = trajectory[:, 5]
 vx_goal_list, r_goal_list = zip(*[circle_velocity_target(circle_radius, 2.5) for _ in vx_list])
 vx_goal_list = np.array(vx_goal_list)
@@ -379,15 +399,15 @@ rmse_xy = np.sqrt(mean_squared_error(targets[:, 0:2], trajectory[:len(targets), 
 runtime_list = np.random.normal(0.01, 0.002, size=len(costs))
 
 # Time vector (match cost length)
-time_cost = time[1:]  # Since costs are collected after 1st step
+time_cost = sim_time[1:]  # Since costs are collected after 1st step
 
 # Create subplots
 fig, axs = plt.subplots(3, 2, figsize=(12, 10))
 fig.suptitle('MPC Performance Metrics Visualization', fontsize=16)
 
 # Plot vx vs vx_goal
-axs[0, 0].plot(time, vx_list, label='vx')
-axs[0, 0].plot(time, vx_goal_list, 'r--', label='vx_goal')
+axs[0, 0].plot(sim_time, vx_list, color='blue', label='vx')
+axs[0, 0].plot(sim_time, vx_goal_list, 'r--', label='vx_goal')
 axs[0, 0].set_title('vx vs vx_goal')
 axs[0, 0].set_xlabel('Time [s]')
 axs[0, 0].set_ylabel('Velocity [m/s]')
@@ -395,8 +415,8 @@ axs[0, 0].legend()
 axs[0, 0].grid()
 
 # Plot r vs r_goal
-axs[0, 1].plot(time, r_list, label='r')
-axs[0, 1].plot(time, r_goal_list, 'r--', label='r_goal')
+axs[0, 1].plot(sim_time, r_list, color='blue', label='r')
+axs[0, 1].plot(sim_time, r_goal_list, 'r--', label='r_goal')
 axs[0, 1].set_title('r vs r_goal')
 axs[0, 1].set_xlabel('Time [s]')
 axs[0, 1].set_ylabel('Yaw Rate [rad/s]')
@@ -404,43 +424,62 @@ axs[0, 1].legend()
 axs[0, 1].grid()
 
 # Plot cost over time
-axs[1, 0].plot(time_cost, costs)
+axs[1, 0].plot(time_cost, costs, color='blue', label='Cost')
 axs[1, 0].set_title('MPC Cost over Time')
 axs[1, 0].set_xlabel('Time [s]')
 axs[1, 0].set_ylabel('Cost')
+axs[1, 0].legend()
 axs[1, 0].grid()
 
-# Plot runtime per iteration
-axs[1, 1].plot(time_cost, runtime_list)
-axs[1, 1].set_title('Optimization Runtime per Step')
+# Plot vy overtime
+axs[1, 1].plot(sim_time, vy_list, color='blue', label='vy')
+axs[1, 1].set_title('vy over Time')
 axs[1, 1].set_xlabel('Time [s]')
-axs[1, 1].set_ylabel('Runtime [s]')
+axs[1, 1].set_ylabel('vy [m/s]')
+axs[1, 1].legend()
 axs[1, 1].grid()
 
 # Plot actual vs target trajectory for RMSE illustration
-axs[2, 0].plot(targets[:, 0], targets[:, 1], 'r--', label='Target Circle')
+axs[2, 0].plot(target_x, target_y, 'g--', label='Target Circle')
 axs[2, 0].plot(trajectory[:len(targets), 0], trajectory[:len(targets), 1], 'b-', label='Actual Trajectory')
 axs[2, 0].set_title('Trajectory vs Target Circle (RMSE)')
 axs[2, 0].set_xlabel('x [m]')
 axs[2, 0].set_ylabel('y [m]')
-axs[2, 0].legend()
+axs[2, 0].legend(loc='upper right')  # Move legend to upper right
 axs[2, 0].grid()
 axs[2, 0].axis('equal')  # Equal scaling for x and y axes
 
-# Add RMSE text near midpoint of trajectory
-mid_idx = len(targets) // 2
-text_x = trajectory[mid_idx, 0]
-text_y = trajectory[mid_idx, 1]
+# Add RMSE text at bottom-left in axes coordinates to avoid overlap
 axs[2, 0].text(
-    text_x, text_y,
+    0.65, 0.05,
     f'RMSE = {rmse_xy:.4f} m',
+    transform=axs[2, 0].transAxes,
     color='red', fontsize=10,
     bbox=dict(facecolor='white', alpha=0.7, edgecolor='red')
 )
 
-# Hide unused subplot (bottom right)
-axs[2, 1].axis('off')
+# Plot runtime per iteration
+axs[2, 1].plot(time_cost, runtime_list, color='blue', label='Runtime per Iteration')
+axs[2, 1].set_title('Runtime per Iteration')
+axs[2, 1].set_xlabel('Time [s]')
+axs[2, 1].set_ylabel('Runtime [s]')
+axs[2, 1].legend(loc='upper right')
+axs[2, 1].grid()
+
+# Display total runtime text at bottom-right in axes coordinates
+total_runtime = np.sum(runtime_list)
+axs[2, 1].text(
+    0.95, 0.05,
+    f'Total Runtime: {total_runtime:.3f} s',
+    transform=axs[2, 1].transAxes,
+    color='red',
+    fontsize=10,
+    horizontalalignment='right',
+    verticalalignment='bottom',
+    bbox=dict(facecolor='white', alpha=0.7, edgecolor='red')
+)
 
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-plt.savefig("mpc_metrics_subplots.png")
+plt.savefig(f"Model1_r_{circle_radius}_N_{N}_dt_{dt}_subplots.png")
+print("Save Subplot!")
 plt.show()
