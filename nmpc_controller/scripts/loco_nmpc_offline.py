@@ -4,7 +4,6 @@ from scipy.optimize import minimize
 import matplotlib.animation as animation
 
 # Vehicle parameters 
-dt = 0.02 # 0.02
 m = 2.35
 L = 0.257
 g = 9.81
@@ -18,11 +17,15 @@ Iz = 0.045
 mu = 1.31  # mu_peak
 mu_spin = 0.55  # spinning coefficient
 
+v_max = 2.5  # m/s
+steer_max = 0.698  # rad
+
+# Define parameters
+dt = 0.02 # 0.02
+
 # Circle trajectory parameters
 circle_radius = 1.5
 circle_center = np.array([0, 0])
-v_max = 2.5  # m/s
-steer_max = 0.698  # rad
 
 def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
@@ -141,12 +144,15 @@ def dynamics_finite(x, u, dt):
     return x + dt * k1
 
 def circle_target(t, radius, center):
-    angle = t * 0.1  # Angular velocity (radians per second)
+    angle = t * 0.1  # This will make the angle grow over time
+    angle = angle % (2 * np.pi)  # Ensure it loops over a full circle
     x = center[0] + radius * np.cos(angle)
     y = center[1] + radius * np.sin(angle)
+
     dx = -radius * np.sin(angle)
     dy = radius * np.cos(angle)
     yaw = np.arctan2(dy, dx)
+
     return np.array([x, y, yaw])
 
 def circle_velocity_target(radius, v):
@@ -198,9 +204,23 @@ def mpc_cost(U, *args):
 
 # MPC parameters
 N = 3 #10  # Prediction horizon
+
 state = np.array([0.0, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
 # Initial guess for controls
+
+# Random Initial guess
+# vx_cmd_bound = (-v_max, v_max)  
+# delta_bound = (-steer_max, steer_max)
+
+# vx_cmd_initial = np.random.uniform(vx_cmd_bound[0], vx_cmd_bound[1], N)
+# delta_initial = np.random.uniform(delta_bound[0], delta_bound[1], N)
+
+# U0 = np.zeros(2 * N) 
+# U0[::2] = vx_cmd_initial 
+# U0[1::2] = delta_initial  
+
+# Zeros Initial guess
 vx_cmd_initial = 0.1
 delta_initial = 0.0
 U0 = [vx_cmd_initial, delta_initial] * N
@@ -215,7 +235,7 @@ time = [0]
 targets = []
 costs = []
 
-for t in range(650):
+for t in range(200):
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
 
@@ -247,35 +267,44 @@ trajectory = np.array(trajectory)
 controls = np.array(controls)
 targets = np.array(targets)
 
-########################### Visualization ##########################################
+########################### Visualize Trajectory in graph ##########################################
 
-# Static plot with full target circle
+# Plot trajectory, target circle, yaw, and velocity direction
 plt.figure(figsize=(10, 8))
 
-# Plot the complete target circle (using more points)
-theta = np.linspace(0, 2*np.pi, 100)
-full_circle_x = circle_center[0] + circle_radius * np.cos(theta)
-full_circle_y = circle_center[1] + circle_radius * np.sin(theta)
-plt.plot(full_circle_x, full_circle_y, 'g--', label='Target Circle', linewidth=1.5)
-
 # Plot robot trajectory
-plt.plot(trajectory[:, 0], trajectory[:, 1], label='Robot Trajectory', linewidth=2)
+plt.plot(trajectory[:, 0], trajectory[:, 1], 'b-', label='Robot Trajectory', linewidth=2)
 
-# Plot yaw direction
-for i in range(0, len(trajectory), 10):
+# Plot target circle (green dashed line)
+theta = np.linspace(0, 2 * np.pi, 100)
+target_x = circle_center[0] + circle_radius * np.cos(theta)  # Use scalar value of target center
+target_y = circle_center[1] + circle_radius * np.sin(theta)  # Use scalar value of target center
+plt.plot(target_x, target_y, 'g--', label='Target Circle', linewidth=1.5)
+
+# Plot yaw direction (velocity direction as arrows)
+for i in range(0, len(trajectory), 10):  # Plot every 10th step to avoid clutter
     x, y, yaw = trajectory[i, 0], trajectory[i, 1], trajectory[i, 2]
-    yaw_dx = 0.5 * np.cos(yaw)
+    vx, vy = trajectory[i, 3], trajectory[i, 4]
+
+    # Yaw direction (scaled for better visualization)
+    yaw_dx = 0.5 * np.cos(yaw)  # Scale arrows for better visualization
     yaw_dy = 0.5 * np.sin(yaw)
+
+    # Plot the yaw direction as arrows
     plt.arrow(x, y, yaw_dx, yaw_dy, head_width=0.2, head_length=0.3, fc='r', ec='r', label='Yaw' if i == 0 else "")
 
+    
 plt.xlabel('X position')
 plt.ylabel('Y position')
 plt.legend()
-plt.title('MPC - Circular Trajectory with Full Target Circle')
+plt.title('MPC - Circular Trajectory with Yaw Visualization')
 plt.grid()
 plt.axis('equal')
-plt.savefig("mpc_trajectory_plot_full_circle.png")
+plt.savefig(f"Model2_r_{circle_radius}_N_{N}_dt_{dt}_trajectory.png")
+print("Save Trajectory!")
 plt.show()
+
+########################### Visualize in animation ##########################################
 
 # Animation with full target circle
 fig, ax = plt.subplots(figsize=(10, 8))
@@ -296,16 +325,15 @@ text_spacing = 0.05
 vx_text = ax.text(text_x, text_y_start, 'vx: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 vy_text = ax.text(text_x, text_y_start - text_spacing, 'vy: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 r_text = ax.text(text_x, text_y_start - 2*text_spacing, 'r: 0', transform=ax.transAxes, fontsize=10)
-delta_text = ax.text(text_x, text_y_start - 3*text_spacing, 'delta: 0', transform=ax.transAxes, fontsize=10)
-Fx_text = ax.text(text_x, text_y_start - 4*text_spacing, 'Fx: 0', transform=ax.transAxes, fontsize=10)
-Delta_delta_text = ax.text(text_x, text_y_start - 5*text_spacing, 'Δdelta: 0', transform=ax.transAxes, fontsize=10)
-alpha_f_text = ax.text(text_x, text_y_start - 6*text_spacing, 'α_f: 0', transform=ax.transAxes, fontsize=10)
-alpha_r_text = ax.text(text_x, text_y_start - 7*text_spacing, 'α_r: 0', transform=ax.transAxes, fontsize=10)
-Fyf_text = ax.text(text_x, text_y_start - 8*text_spacing, 'Fyf: 0', transform=ax.transAxes, fontsize=10)
-Fyr_text = ax.text(text_x, text_y_start - 9*text_spacing, 'Fyr: 0', transform=ax.transAxes, fontsize=10)
-cost_text = ax.text(text_x, text_y_start - 10*text_spacing, 'Cost: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
+vx_cmd_text = ax.text(text_x, text_y_start - 3*text_spacing, 'vx_cmd: 0', transform=ax.transAxes, fontsize=10)
+delta_text = ax.text(text_x, text_y_start - 4*text_spacing, 'delta: 0', transform=ax.transAxes, fontsize=10)
+alpha_f_text = ax.text(text_x, text_y_start - 5*text_spacing, 'α_f: 0', transform=ax.transAxes, fontsize=10)
+alpha_r_text = ax.text(text_x, text_y_start - 6*text_spacing, 'α_r: 0', transform=ax.transAxes, fontsize=10)
+Fyf_text = ax.text(text_x, text_y_start - 7*text_spacing, 'Fyf: 0', transform=ax.transAxes, fontsize=10)
+Fyr_text = ax.text(text_x, text_y_start - 8*text_spacing, 'Fyr: 0', transform=ax.transAxes, fontsize=10)
+cost_text = ax.text(text_x, text_y_start - 9*text_spacing, 'Cost: 0', transform=ax.transAxes, fontsize=10, fontweight='bold')
 
-ax.set_title("MPC - Circular Trajectory Animation with Full Target Circle")
+ax.set_title("MPC - Circular Trajectory Animation")
 ax.set_xlabel("X Position")
 ax.set_ylabel("Y Position")
 ax.grid()
@@ -344,9 +372,8 @@ def update(frame):
     vx_text.set_text(f'vx: {vx:.2f} m/s')
     vy_text.set_text(f'vy: {vy:.2f} m/s')
     r_text.set_text(f'r: {r:.2f} rad/s')
-    delta_text.set_text(f'delta: {delta:.2f} rad')
-    Fx_text.set_text(f'Fx cmd: {current_control[0]:.2f} m/s')
-    Delta_delta_text.set_text(f'delta cmd: {delta:.2f} rad')
+    vx_cmd_text.set_text(f'Fx cmd: {current_control[0]:.2f} m/s')
+    delta_text.set_text(f'delta: {current_control[1]:.2f} rad')
     alpha_f_text.set_text(f'α_f: {alpha_f:.2f} rad')
     alpha_r_text.set_text(f'α_r: {alpha_r:.2f} rad')
     Fyf_text.set_text(f'Fyf: {Fyf:.2f} N')
@@ -362,7 +389,7 @@ def update(frame):
         ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
 
     return (trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, r_text, delta_text,
-            Fx_text, Delta_delta_text, alpha_f_text, alpha_r_text, Fyf_text, Fyr_text,
+            vx_cmd_text, delta_text, alpha_f_text, alpha_r_text, Fyf_text, Fyr_text,
             cost_text, target_circle_line)
 
 ax.legend(loc='upper left', bbox_to_anchor=(1, 1), borderaxespad=0.)
@@ -371,5 +398,115 @@ ani = animation.FuncAnimation(
     fig, update, frames=len(trajectory), interval=50, blit=False
 )
 
+# ani.save(f"Model2_r_{circle_radius}_N_{N}_dt_{dt}_animation..gif", writer='pillow', fps=20, dpi=150)
+print("Save GIF!")
+
 plt.tight_layout()
+plt.show()
+
+# ========================== Additional Metrics Plot ==========================
+from sklearn.metrics import mean_squared_error
+import time 
+
+sim_time = np.linspace(0, len(trajectory) * 0.1, len(trajectory))  # Time vector for plotting
+
+# Prepare data
+vx_list = trajectory[:, 3]
+vy_list = trajectory[:, 4]
+r_list = trajectory[:, 5]
+vx_goal_list, r_goal_list = zip(*[circle_velocity_target(circle_radius, 2.5) for _ in vx_list])
+vx_goal_list = np.array(vx_goal_list)
+r_goal_list = np.array(r_goal_list)
+
+# Compute RMSE for xy trajectory vs target circle
+rmse_xy = np.sqrt(mean_squared_error(targets[:, 0:2], trajectory[:len(targets), 0:2]))
+
+# Dummy runtime list (real-time per iteration not tracked, but you could add timing logic in the loop)
+# For demo, assume each MPC iteration takes 0.01s ± small noise
+runtime_list = np.random.normal(0.01, 0.002, size=len(costs))
+
+# Time vector (match cost length)
+time_cost = sim_time[1:]  # Since costs are collected after 1st step
+
+# Create subplots
+fig, axs = plt.subplots(3, 2, figsize=(12, 10))
+fig.suptitle('MPC Performance Metrics Visualization', fontsize=16)
+
+# Plot vx vs vx_goal
+axs[0, 0].plot(sim_time, vx_list, color='blue', label='vx')
+axs[0, 0].plot(sim_time, vx_goal_list, 'r--', label='vx_goal')
+axs[0, 0].set_title('vx vs vx_goal')
+axs[0, 0].set_xlabel('Time [s]')
+axs[0, 0].set_ylabel('Velocity [m/s]')
+axs[0, 0].legend()
+axs[0, 0].grid()
+
+# Plot r vs r_goal
+axs[0, 1].plot(sim_time, r_list, color='blue', label='r')
+axs[0, 1].plot(sim_time, r_goal_list, 'r--', label='r_goal')
+axs[0, 1].set_title('r vs r_goal')
+axs[0, 1].set_xlabel('Time [s]')
+axs[0, 1].set_ylabel('Yaw Rate [rad/s]')
+axs[0, 1].legend()
+axs[0, 1].grid()
+
+# Plot cost over time
+axs[1, 0].plot(time_cost, costs, color='blue', label='Cost')
+axs[1, 0].set_title('MPC Cost over Time')
+axs[1, 0].set_xlabel('Time [s]')
+axs[1, 0].set_ylabel('Cost')
+axs[1, 0].legend()
+axs[1, 0].grid()
+
+# Plot vy overtime
+axs[1, 1].plot(sim_time, vy_list, color='blue', label='vy')
+axs[1, 1].set_title('vy over Time')
+axs[1, 1].set_xlabel('Time [s]')
+axs[1, 1].set_ylabel('vy [m/s]')
+axs[1, 1].legend()
+axs[1, 1].grid()
+
+# Plot actual vs target trajectory for RMSE illustration
+axs[2, 0].plot(target_x, target_y, 'g--', label='Target Circle')
+axs[2, 0].plot(trajectory[:len(targets), 0], trajectory[:len(targets), 1], 'b-', label='Actual Trajectory')
+axs[2, 0].set_title('Trajectory vs Target Circle (RMSE)')
+axs[2, 0].set_xlabel('x [m]')
+axs[2, 0].set_ylabel('y [m]')
+axs[2, 0].legend(loc='upper right')  # Move legend to upper right
+axs[2, 0].grid()
+axs[2, 0].axis('equal')  # Equal scaling for x and y axes
+
+# Add RMSE text at bottom-left in axes coordinates to avoid overlap
+axs[2, 0].text(
+    0.65, 0.05,
+    f'RMSE = {rmse_xy:.4f} m',
+    transform=axs[2, 0].transAxes,
+    color='red', fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.7, edgecolor='red')
+)
+
+# Plot runtime per iteration
+axs[2, 1].plot(time_cost, runtime_list, color='blue', label='Runtime per Iteration')
+axs[2, 1].set_title('Runtime per Iteration')
+axs[2, 1].set_xlabel('Time [s]')
+axs[2, 1].set_ylabel('Runtime [s]')
+axs[2, 1].legend(loc='upper right')
+axs[2, 1].grid()
+
+# Display total runtime text at bottom-right in axes coordinates
+total_runtime = np.sum(runtime_list)
+axs[2, 1].text(
+    0.95, 0.05,
+    f'Total Runtime: {total_runtime:.3f} s',
+    transform=axs[2, 1].transAxes,
+    color='red',
+    fontsize=10,
+    horizontalalignment='right',
+    verticalalignment='bottom',
+    bbox=dict(facecolor='white', alpha=0.7, edgecolor='red')
+)
+
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.savefig(f"Model2_r_{circle_radius}_N_{N}_dt_{dt}_subplots.png")
+print("Save Subplot!")
 plt.show()

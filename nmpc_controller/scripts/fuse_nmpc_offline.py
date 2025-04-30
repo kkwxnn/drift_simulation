@@ -194,7 +194,7 @@ time = [0]  # Time stamps
 targets = []  # Store dynamic targets
 costs = []
 
-for t in range(200):  # 1000
+for t in range(200):  # 650
     # Get current target on the circle
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
@@ -237,8 +237,8 @@ plt.plot(trajectory[:, 0], trajectory[:, 1], 'b-', label='Robot Trajectory', lin
 
 # Plot target circle (green dashed line)
 theta = np.linspace(0, 2 * np.pi, 100)
-target_x = targets[0, 0] + circle_radius * np.cos(theta)  # Use scalar value of target center
-target_y = targets[0, 1] + circle_radius * np.sin(theta)  # Use scalar value of target center
+target_x = circle_center[0] + circle_radius * np.cos(theta)  # Use scalar value of target center
+target_y = circle_center[1] + circle_radius * np.sin(theta)  # Use scalar value of target center
 plt.plot(target_x, target_y, 'g--', label='Target Circle', linewidth=1.5)
 
 # Plot yaw direction (velocity direction as arrows)
