@@ -205,7 +205,7 @@ def mpc_cost(U, *args):
 # MPC parameters
 N = 3 #10  # Prediction horizon
 
-state = np.array([0.0, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
+state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
 # Initial guess for controls
 

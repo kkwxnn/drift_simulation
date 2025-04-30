@@ -162,7 +162,7 @@ def mpc_cost(U, *args):
 # MPC parameters
 N = 3 # 10 # 3  # Prediction horizon
 
-state = np.array([0.0, 0, np.pi/2, 0, 0, 0, 0]) 
+state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0, 0]) 
 
 # Initial guess for controls
 
