@@ -96,9 +96,10 @@ def fit_circle(x, y):
 # =============================
 def main():
     # Set the base directory
-    base_dir = r"C:\Users\kwan2\Documents\GitHub\drift_simulation\f1tenth_maps-master\maps"
-    png_path = os.path.join(base_dir, "torino_redraw_small.png")
-    yaml_path = os.path.join(base_dir, "torino_redraw_small.yaml")
+    base_dir = r"C:\Users\kwan2\Documents\GitHub\drift_simulation\f1tenth_maps-master\maps" # Window
+    # base_dir = r"/home/kkwxnn/drift_simulation/src/f1tenth_maps-master/maps" # Ubuntu
+    png_path = os.path.join(base_dir, "blackbox2022_1.png")
+    yaml_path = os.path.join(base_dir, "blackbox2022_1.yaml")
 
     # Load the map
     img, resolution, origin = load_map(png_path, yaml_path)
