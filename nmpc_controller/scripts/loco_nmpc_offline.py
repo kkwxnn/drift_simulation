@@ -233,18 +233,25 @@ bounds = [(0, v_max), (-steer_max, steer_max)] * N
 # Run MPC
 trajectory = [state]
 controls = []
-time = [0]
+time_list = [0]
 targets = []
 costs = []
+alpha_f_list = []
+alpha_r_list = []
+runtime_list = []
 
 for t in range(200):
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
 
+    start_time = time.time()  # Start timing
+
     result = minimize(
         mpc_cost, U0, args=(N, state, target),
         bounds=bounds, method='SLSQP'
     )
+
+    runtime_list.append(time.time() - start_time)  # Store iteration runtime
     
     if not result.success:
         print("Optimization failed!")
@@ -262,7 +269,13 @@ for t in range(200):
     # Store results
     trajectory.append(state)
     controls.append(control)
-    time.append((t + 1) * dt)
+    time_list.append((t + 1) * dt)
+
+    vx, vy, r = state[3], state[4], state[5]
+    delta = control[1]
+    alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
+    alpha_f_list.append(alpha_f)
+    alpha_r_list.append(alpha_r)
 
 # Convert to numpy arrays
 trajectory = np.array(trajectory)
@@ -433,6 +446,7 @@ plt.show()
 sim_time = np.linspace(0, len(trajectory) * 0.1, len(trajectory))  # Time vector for plotting
 
 # Prepare data
+yaw_list = trajectory[:, 2]
 vx_list = trajectory[:, 3]
 vy_list = trajectory[:, 4]
 r_list = trajectory[:, 5]
@@ -440,15 +454,8 @@ vx_goal_list, r_goal_list = zip(*[circle_velocity_target(circle_radius, 2.5) for
 vx_goal_list = np.array(vx_goal_list)
 r_goal_list = np.array(r_goal_list)
 
-# Dummy runtime list (real-time per iteration not tracked, but you could add timing logic in the loop)
-# For demo, assume each MPC iteration takes 0.01s ± small noise
-runtime_list = np.random.normal(0.01, 0.002, size=len(costs))
-
-# Time vector (match cost length)
-time_cost = sim_time[1:]  # Since costs are collected after 1st step
-
 # Create subplots
-fig, axs = plt.subplots(3, 2, figsize=(12, 10))
+fig, axs = plt.subplots(4, 2, figsize=(14, 14))
 fig.suptitle('MPC Performance Metrics Visualization', fontsize=16)
 
 # Plot vx vs vx_goal
@@ -469,11 +476,11 @@ axs[0, 1].set_ylabel('Yaw Rate [rad/s]')
 axs[0, 1].legend()
 axs[0, 1].grid()
 
-# Plot cost over time
-axs[1, 0].plot(time_cost, costs, color='blue', label='Cost')
-axs[1, 0].set_title('MPC Cost over Time')
+# Plot heading (yaw)
+axs[1, 0].plot(sim_time, yaw_list, color='blue', label='Yaw')
+axs[1, 0].set_title('Heading (Yaw) Over Time')
 axs[1, 0].set_xlabel('Time [s]')
-axs[1, 0].set_ylabel('Cost')
+axs[1, 0].set_ylabel('Yaw (heading) [rad]')
 axs[1, 0].legend()
 axs[1, 0].grid()
 
@@ -494,17 +501,34 @@ axs[2, 0].set_ylabel('Control Value')
 axs[2, 0].legend()
 axs[2, 0].grid(True)
 
-# Plot runtime per iteration
-axs[2, 1].plot(time_cost, runtime_list, color='blue', label='Runtime per Iteration')
-axs[2, 1].set_title('Runtime per Iteration')
+# Plot Front and Rear Slip Angles
+axs[2, 1].plot(sim_time[:-1], alpha_f_list, label='Front Slip Angle', color='blue')
+axs[2, 1].plot(sim_time[:-1], alpha_r_list, label='Rear Slip Angle', color='orange')
+axs[2, 1].set_title('Front and Rear Slip Angles Over Time')
 axs[2, 1].set_xlabel('Time [s]')
-axs[2, 1].set_ylabel('Runtime [s]')
-axs[2, 1].legend(loc='upper right')
-axs[2, 1].grid()
+axs[2, 1].set_ylabel('Slip Angle [rad]')
+axs[2, 1].legend()
+axs[2, 1].grid(True)
+
+# Plot cost over time
+axs[3, 0].plot(sim_time[:-1], costs, color='blue', label='Cost')
+axs[3, 0].set_title('MPC Cost over Time')
+axs[3, 0].set_xlabel('Time [s]')
+axs[3, 0].set_ylabel('Cost')
+axs[3, 0].legend()
+axs[3, 0].grid()
+
+# Plot runtime per iteration
+axs[3, 1].plot(sim_time[:-1], runtime_list, color='blue', label='Runtime per Iteration')
+axs[3, 1].set_title('Runtime per Iteration')
+axs[3, 1].set_xlabel('Time [s]')
+axs[3, 1].set_ylabel('Runtime [s]')
+axs[3, 1].legend(loc='upper right')
+axs[3, 1].grid()
 
 # Display total runtime text at bottom-right in axes coordinates
 total_runtime = np.sum(runtime_list)
-axs[2, 1].text(
+axs[3, 1].text(
     0.95, 0.05,
     f'Total Runtime: {total_runtime:.3f} s',
     transform=axs[2, 1].transAxes,

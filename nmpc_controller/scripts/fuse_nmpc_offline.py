@@ -193,19 +193,27 @@ bounds = [(-5.0, 5.0),                  # Fx bounds
 # Run MPC
 trajectory = [state]
 controls = []  # Store control inputs (Fx, Delta delta)
-time = [0]  # Time stamps
+time_list = [0]  # Time stamps
 targets = []  # Store dynamic targets
 costs = []
+alpha_f_list = []
+alpha_r_list = []
+runtime_list = []
 
 for t in range(200):  # 650
     # Get current target on the circle
     target = circle_target(t * dt, circle_radius, circle_center)
     targets.append(target)
 
+    start_time = time.time()  # Start timing
+
     result = minimize(
         mpc_cost, U0, args=(N, state, target),
         bounds=bounds, method='SLSQP'
     )
+
+    runtime_list.append(time.time() - start_time)  # Store iteration runtime
+
     if not result.success:
         print("Optimization failed!")
         break
@@ -220,7 +228,12 @@ for t in range(200):  # 650
     state = drift_model(state, control, dt)
     trajectory.append(state)
     controls.append(control)
-    time.append((t + 1) * dt)
+    time_list.append((t + 1) * dt)
+
+    vx, vy, r, delta = state[3], state[4], state[5], state[6]
+    alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
+    alpha_f_list.append(alpha_f)
+    alpha_r_list.append(alpha_r)
 
     # Shift the predicted controls
     # U0 = np.hstack([U_opt[2:], np.zeros(2)])
@@ -350,27 +363,56 @@ def update(frame):
     target_y = circle_center[1] + circle_radius * np.sin(theta)
     target_circle_line.set_data(target_x, target_y)
 
-    # Update text elements (optional)
-    current_state = trajectory[frame]
-    vx, vy, r, delta = current_state[3], current_state[4], current_state[5], current_state[6]
+    # Update text elements with current state information
+    vx = trajectory[frame, 3]
+    vy = trajectory[frame, 4]
+    r = trajectory[frame, 5]
+    delta = trajectory[frame, 6] 
+    
+    # Get control inputs safely
+    if frame < len(controls):
+        current_control = controls[frame]
+        Fx = current_control[0]  # Longitudinal force (Fx)
+        Delta_delta = current_control[1]  # Steering control input (Delta_delta)
+    else:
+        current_control = [0, 0]  # Default control values when out of bounds
+        Fx = 0  # Default longitudinal force when out of bounds
+        Delta_delta = 0  # Default steering control input when out of bounds
 
-    # Update the variables displayed as text
+    # Calculate slip angles (optional for debugging)
+    alpha_f, alpha_r = calculate_slip_angles(vx, vy, r, delta)
+
+    # Calculate tire forces (optional for debugging)
+    Fyf, Fyr = calculate_tire_forces(alpha_f, alpha_r)
+
+    # Calculate cost (optional for debugging)
+    cost = costs[frame] if frame < len(costs) else 0  # Ensure cost is within bounds
+
+    # Update all text elements
     vx_text.set_text(f'vx: {vx:.2f} m/s')
     vy_text.set_text(f'vy: {vy:.2f} m/s')
     r_text.set_text(f'r: {r:.2f} rad/s')
     delta_text.set_text(f'delta: {delta:.2f} rad')
+    Fx_text.set_text(f'Fx: {Fx:.2f} N')
+    Delta_delta_text.set_text(f'Control Input (Δdelta): {Delta_delta:.2f} rad')
+    alpha_f_text.set_text(f'α_f: {alpha_f:.2f} rad')
+    alpha_r_text.set_text(f'α_r: {alpha_r:.2f} rad')
+    Fyf_text.set_text(f'Fyf: {Fyf:.2f} N')
+    Fyr_text.set_text(f'Fyr: {Fyr:.2f} N')
+    cost_text.set_text(f'Cost: {cost:.2f}')
 
-    # Dynamically adjust plot limits
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
-    buffer = 2.0  # Space around the car for visibility
+    buffer = 2.0
 
     if x < x_min + buffer or x > x_max - buffer or y < y_min + buffer or y > y_max - buffer:
         ax.set_xlim(min(x_min, x) - buffer, max(x_max, x) + buffer)
         ax.set_ylim(min(y_min, y) - buffer, max(y_max, y) + buffer)
 
-    return (trajectory_line, car_marker, yaw_arrow, vx_text, vy_text, r_text, delta_text,
-            target_circle_line)
+
+    # Return updated plot elements for animation
+    return trajectory_line, target_circle_line, car_marker, yaw_arrow, vx_text, vy_text, r_text, delta_text, Fx_text, Delta_delta_text, alpha_f_text, alpha_r_text, Fyf_text, Fyr_text, cost_text
+
 
 
 # Adjust legend position to avoid overlap with the text
@@ -390,10 +432,10 @@ plt.show()
 
 # ========================== Additional Metrics Plot ==========================
 
-
 sim_time = np.linspace(0, len(trajectory) * 0.1, len(trajectory))  # Time vector for plotting
 
 # Prepare data
+yaw_list = trajectory[:, 2]
 vx_list = trajectory[:, 3]
 vy_list = trajectory[:, 4]
 r_list = trajectory[:, 5]
@@ -401,15 +443,8 @@ vx_goal_list, r_goal_list = zip(*[circle_velocity_target(circle_radius, 2.5) for
 vx_goal_list = np.array(vx_goal_list)
 r_goal_list = np.array(r_goal_list)
 
-# Dummy runtime list (real-time per iteration not tracked, but you could add timing logic in the loop)
-# For demo, assume each MPC iteration takes 0.01s ± small noise
-runtime_list = np.random.normal(0.01, 0.002, size=len(costs))
-
-# Time vector (match cost length)
-time_cost = sim_time[1:]  # Since costs are collected after 1st step
-
 # Create subplots
-fig, axs = plt.subplots(3, 2, figsize=(12, 10))
+fig, axs = plt.subplots(4, 2, figsize=(14, 14))
 fig.suptitle('MPC Performance Metrics Visualization', fontsize=16)
 
 # Plot vx vs vx_goal
@@ -430,11 +465,11 @@ axs[0, 1].set_ylabel('Yaw Rate [rad/s]')
 axs[0, 1].legend()
 axs[0, 1].grid()
 
-# Plot cost over time
-axs[1, 0].plot(time_cost, costs, color='blue', label='Cost')
-axs[1, 0].set_title('MPC Cost over Time')
+# Plot heading (yaw)
+axs[1, 0].plot(sim_time, yaw_list, color='blue', label='Yaw')
+axs[1, 0].set_title('Heading (Yaw) Over Time')
 axs[1, 0].set_xlabel('Time [s]')
-axs[1, 0].set_ylabel('Cost')
+axs[1, 0].set_ylabel('Yaw (heading) [rad]')
 axs[1, 0].legend()
 axs[1, 0].grid()
 
@@ -455,17 +490,34 @@ axs[2, 0].set_ylabel('Control Value')
 axs[2, 0].legend()
 axs[2, 0].grid(True)
 
-# Plot runtime per iteration
-axs[2, 1].plot(time_cost, runtime_list, color='blue', label='Runtime per Iteration')
-axs[2, 1].set_title('Runtime per Iteration')
+# Plot Front and Rear Slip Angles
+axs[2, 1].plot(sim_time[:-1], alpha_f_list, label='Front Slip Angle', color='blue')
+axs[2, 1].plot(sim_time[:-1], alpha_r_list, label='Rear Slip Angle', color='orange')
+axs[2, 1].set_title('Front and Rear Slip Angles Over Time')
 axs[2, 1].set_xlabel('Time [s]')
-axs[2, 1].set_ylabel('Runtime [s]')
-axs[2, 1].legend(loc='upper right')
-axs[2, 1].grid()
+axs[2, 1].set_ylabel('Slip Angle [rad]')
+axs[2, 1].legend()
+axs[2, 1].grid(True)
+
+# Plot cost over time
+axs[3, 0].plot(sim_time[:-1], costs, color='blue', label='Cost')
+axs[3, 0].set_title('MPC Cost over Time')
+axs[3, 0].set_xlabel('Time [s]')
+axs[3, 0].set_ylabel('Cost')
+axs[3, 0].legend()
+axs[3, 0].grid()
+
+# Plot runtime per iteration
+axs[3, 1].plot(sim_time[:-1], runtime_list, color='blue', label='Runtime per Iteration')
+axs[3, 1].set_title('Runtime per Iteration')
+axs[3, 1].set_xlabel('Time [s]')
+axs[3, 1].set_ylabel('Runtime [s]')
+axs[3, 1].legend(loc='upper right')
+axs[3, 1].grid()
 
 # Display total runtime text at bottom-right in axes coordinates
 total_runtime = np.sum(runtime_list)
-axs[2, 1].text(
+axs[3, 1].text(
     0.95, 0.05,
     f'Total Runtime: {total_runtime:.3f} s',
     transform=axs[2, 1].transAxes,
@@ -480,3 +532,5 @@ plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 plt.savefig(f"Model1_r_{circle_radius}_N_{N}_dt_{dt}_subplots.png")
 print("Save Subplot!")
 plt.show()
+
+
