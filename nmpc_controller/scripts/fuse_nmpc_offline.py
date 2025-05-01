@@ -520,7 +520,7 @@ total_runtime = np.sum(runtime_list)
 axs[3, 1].text(
     0.95, 0.05,
     f'Total Runtime: {total_runtime:.3f} s',
-    transform=axs[2, 1].transAxes,
+    transform=axs[3, 1].transAxes,
     color='red',
     fontsize=10,
     horizontalalignment='right',
@@ -533,4 +533,44 @@ plt.savefig(f"Model1_r_{circle_radius}_N_{N}_dt_{dt}_subplots.png")
 print("Save Subplot!")
 plt.show()
 
+####################### Save value to csv ####################################
 
+import csv
+
+# Prepare data for CSV
+csv_data = {
+    'time': time_list[:-1],  
+    'x': trajectory[:-1, 0],
+    'y': trajectory[:-1, 1],
+    'yaw': trajectory[:-1, 2],
+    'vx': trajectory[:-1, 3],
+    'vy': trajectory[:-1, 4],
+    'r': trajectory[:-1, 5],
+    'delta': trajectory[:-1, 6],
+    'Fx': controls[:, 0],
+    'Delta_delta': controls[:, 1],
+    'target_x': targets[:, 0],
+    'target_y': targets[:, 1],
+    'target_yaw': targets[:, 2],
+    'cost': costs,
+    'alpha_f': alpha_f_list,
+    'alpha_r': alpha_r_list,
+    'runtime': runtime_list,
+    'vx_goal': vx_goal_list[:-1],
+    'r_goal': r_goal_list[:-1]
+}
+
+# Write to CSV
+csv_filename = f"Model1_{circle_radius}_N_{N}_dt_{dt}.csv"
+with open(csv_filename, 'w', newline='') as csvfile:
+    writer = csv.writer(csvfile)
+    
+    # Write header
+    writer.writerow(csv_data.keys())
+    
+    # Write data rows
+    for i in range(len(controls)):
+        row = [csv_data[col][i] for col in csv_data.keys()]
+        writer.writerow(row)
+
+print(f"Data saved to {csv_filename}")
