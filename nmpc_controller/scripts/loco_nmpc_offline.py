@@ -23,10 +23,10 @@ v_max = 2.5  # m/s
 steer_max = 0.698  # rad
 
 # Define parameters
-dt = 0.02 # 0.02
+dt = 0.1 # 0.02
 
 # Circle trajectory parameters
-circle_radius = 1.5
+circle_radius = 0.8
 circle_center = np.array([0, 0])
 
 def wrap_to_pi(angle):
@@ -211,7 +211,7 @@ state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, y
 
 # Initial guess for controls
 
-# Random Initial guess
+# # Random Initial guess
 # vx_cmd_bound = (-v_max, v_max)  
 # delta_bound = (-steer_max, steer_max)
 
@@ -384,7 +384,7 @@ def update(frame):
         yaw_arrow.remove()
 
     trajectory_line.set_data(trajectory[:frame+1, 0], trajectory[:frame+1, 1])
-    car_marker.set_data(trajectory[frame, 0], trajectory[frame, 1])
+    car_marker.set_data([trajectory[frame, 0]], [trajectory[frame, 1]])
 
     x, y, yaw = trajectory[frame, 0], trajectory[frame, 1], trajectory[frame, 2]
     yaw_dx = 0.5 * np.cos(yaw)
@@ -435,7 +435,7 @@ ani = animation.FuncAnimation(
     fig, update, frames=len(trajectory), interval=50, blit=False
 )
 
-ani.save(f"Model2_r_{circle_radius}_N_{N}_dt_{dt}_animation..gif", writer='pillow', fps=20, dpi=150)
+ani.save(f"Model2_r_{circle_radius}_N_{N}_dt_{dt}_animation.gif", writer='pillow', fps=20, dpi=150)
 print("Save GIF!")
 
 plt.tight_layout()

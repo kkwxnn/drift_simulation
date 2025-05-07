@@ -23,9 +23,9 @@ v_max = 2.5 # m/s
 steer_max = 0.698 # rad
 
 # Define parameters
-dt = 0.1 # 0.02  # time step
+dt = 0.08 # 0.02  # time step
 
-circle_radius = 1.5 # 10.0  # Radius of the circle
+circle_radius = 0.4 # 10.0  # Radius of the circle
 circle_center = np.array([0, 0])  # Center of the circle
 
 # Generate circle trajectory
@@ -80,7 +80,7 @@ def drift_model(state, control, dt):
     # Fyf = 0.0
     # Fyr = 0.0
 
-    B = 0.1
+    B = 1.0 #0.5 #0.1
     # Dynamic model equations
     x_dot_dyn = vx * np.cos(yaw) - vy * np.sin(yaw)
     y_dot_dyn = vx * np.sin(yaw) + vy * np.cos(yaw)
@@ -88,6 +88,9 @@ def drift_model(state, control, dt):
     vx_dot_dyn = (1 / m) * (-B*vx + Fx - Fyf * np.sin(delta) + m * vy * r)
     vy_dot_dyn = (1 / m) * (-B*vy + Fyr + Fyf * np.cos(delta) - m * vx * r)
     r_dot_dyn = (1 / Iz) * (-B*r + Fyf * Lf * np.cos(delta) - Fyr * Lr)
+    # vx_dot_dyn = (1 / m) * (Fx - Fyf * np.sin(delta) + m * vy * r)
+    # vy_dot_dyn = (1 / m) * (Fyr + Fyf * np.cos(delta) - m * vx * r)
+    # r_dot_dyn = (1 / Iz) * (Fyf * Lf * np.cos(delta) - Fyr * Lr)
     delta_dot_dyn = Delta_delta
 
     # Kinematic model equations
@@ -95,6 +98,7 @@ def drift_model(state, control, dt):
     y_dot_kin = vx * np.sin(yaw) + vy * np.cos(yaw)
     yaw_dot_kin = r
     vx_dot_kin = (-B*vx + Fx) / m
+    # vx_dot_kin = (Fx) / m
     vy_dot_kin = (Delta_delta * vx) * (Lr / (Lr + Lf))
     r_dot_kin = (Delta_delta * vx) * (1 / (Lr + Lf))
     delta_dot_kin = Delta_delta
@@ -181,7 +185,7 @@ state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0, 0])
 # U0[1::2] = Delta_delta_initial  
 
 # Zeros Initial guess
-Fx_initial = 0.0  # Constant guess for Fx
+Fx_initial = 0.1  # Constant guess for Fx
 Delta_delta_initial = 0.0  # Constant guess for Delta delta
 
 U0 = [Fx_initial, Delta_delta_initial] * N
@@ -423,7 +427,7 @@ ani = animation.FuncAnimation(
     fig, update, frames=len(trajectory), interval=50, blit=False
 )
 
-# ani.save(f"Model1_r_{circle_radius}_N_{N}_dt_{dt}_animation..gif", writer='pillow', fps=20, dpi=150)
+ani.save(f"Model1_r_{circle_radius}_N_{N}_dt_{dt}_animation.gif", writer='pillow', fps=20, dpi=150)
 print("Save GIF!")
 
 plt.tight_layout()
