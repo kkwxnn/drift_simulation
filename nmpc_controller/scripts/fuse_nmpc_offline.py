@@ -23,9 +23,9 @@ v_max = 2.5 # m/s
 steer_max = 0.698 # rad
 
 # Define parameters
-dt = 0.08 # 0.02  # time step
+dt = 0.05 # 0.02  # time step
 
-circle_radius = 0.4 # 10.0  # Radius of the circle
+circle_radius = 0.6 # 10.0  # Radius of the circle
 circle_center = np.array([0, 0])  # Center of the circle
 
 # Generate circle trajectory
@@ -167,7 +167,7 @@ def mpc_cost(U, *args):
 
 
 # MPC parameters
-N = 3 # 10 # 3  # Prediction horizon
+N = 8 # 10 # 3  # Prediction horizon
 
 state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0, 0]) 
 

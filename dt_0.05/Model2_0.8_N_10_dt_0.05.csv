@@ -1,0 +1,2 @@
+time,x,y,yaw,vx,vy,r,vx_cmd,delta,target_x,target_y,target_yaw,cost,alpha_f,alpha_r,runtime,vx_goal,r_goal
+0,0.8,0.0,1.5707963267948966,0.0,0.0,0.0,0.1,0.0,0.8,0.0,1.5707963267948966,154.3657102191862,0.0,0.0,0.016088485717773438,2.5,3.125

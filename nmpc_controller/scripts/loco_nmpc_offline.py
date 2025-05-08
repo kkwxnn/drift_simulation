@@ -23,10 +23,10 @@ v_max = 2.5  # m/s
 steer_max = 0.698  # rad
 
 # Define parameters
-dt = 0.1 # 0.02
+dt = 0.05 # 0.02
 
 # Circle trajectory parameters
-circle_radius = 0.8
+circle_radius = 0.7
 circle_center = np.array([0, 0])
 
 def wrap_to_pi(angle):
@@ -205,7 +205,7 @@ def mpc_cost(U, *args):
     return cost
 
 # MPC parameters
-N = 3 # 10  # Prediction horizon
+N = 9 # 10  # Prediction horizon
 
 state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
@@ -247,8 +247,10 @@ for t in range(200):
     start_time = time.time()  # Start timing
 
     result = minimize(
-        mpc_cost, U0, args=(N, state, target),
-        bounds=bounds, method='SLSQP'
+    mpc_cost, U0, args=(N, state, target),
+    bounds=bounds,
+    method='SLSQP',
+    options={'maxiter': 1000, 'disp': True}  
     )
 
     runtime_list.append(time.time() - start_time)  # Store iteration runtime
@@ -519,7 +521,8 @@ axs[3, 0].legend()
 axs[3, 0].grid()
 
 # Plot runtime per iteration
-axs[3, 1].plot(sim_time[:-1], runtime_list, color='blue', label='Runtime per Iteration')
+# axs[3, 1].plot(sim_time[:-1], runtime_list, color='blue', label='Runtime per Iteration')
+axs[3, 1].plot(runtime_list, color='blue', label='Runtime per Iteration')
 axs[3, 1].set_title('Runtime per Iteration')
 axs[3, 1].set_xlabel('Time [s]')
 axs[3, 1].set_ylabel('Runtime [s]')
