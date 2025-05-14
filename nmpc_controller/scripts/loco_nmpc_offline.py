@@ -26,7 +26,7 @@ steer_max = 0.698  # rad
 dt = 0.1 # 0.02
 
 # Circle trajectory parameters
-circle_radius = 0.4
+circle_radius = 0.6
 circle_center = np.array([0, 0])
 
 def wrap_to_pi(angle):
@@ -205,7 +205,7 @@ def mpc_cost(U, *args):
     return cost
 
 # MPC parameters
-N = 1 # 10  # Prediction horizon
+N = 2 # 10  # Prediction horizon
 
 state = np.array([circle_radius, 0, np.pi/2, 0, 0, 0])  # Initial state [x, y, yaw, vx, vy, r]
 
